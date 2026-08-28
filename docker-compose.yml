@@ -50,6 +50,7 @@ services:
     networks:
       web:
         aliases:
+          - ${HOSTNAME_FQDN}
           - stepca.${HOSTNAME_FQDN}
           - portainer.${HOSTNAME_FQDN}
           - keycloak.${HOSTNAME_FQDN}
