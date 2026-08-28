@@ -42,9 +42,13 @@
     .chip-title { font-size: 14px; font-weight: 600; fill: var(--text); }
     .chip-sub { font-size: 11px; fill: var(--text-secondary); }
     .icon { font-size: 22px; }
-    .conn { stroke: var(--line); stroke-width: 1.5; fill: none; }
-    .conn-dashed { stroke: var(--line); stroke-width: 1.5; fill: none; stroke-dasharray: 6 5; }
-    .conn-dotted { stroke: var(--line); stroke-width: 1.5; fill: none; stroke-dasharray: 1.5 4; stroke-linecap: round; }
+    .wire { stroke: var(--line); stroke-width: 1.5; fill: none; }
+    .conn { stroke: var(--web-zone-border); stroke-width: 2; fill: none; }
+    .conn-dashed { stroke: var(--direct-zone-border); stroke-width: 2; fill: none; stroke-dasharray: 6 5; }
+    .conn-dotted { stroke: var(--pki-zone-border); stroke-width: 2; fill: none; stroke-dasharray: 1.5 4; stroke-linecap: round; }
+    .arrow-https { fill: var(--web-zone-border); }
+    .arrow-direct { fill: var(--direct-zone-border); }
+    .arrow-cert { fill: var(--pki-zone-border); }
     .legend-text { font-size: 12px; fill: var(--text-secondary); }
     .zone-web text.zone-label { fill: var(--web-zone-border); }
     .zone-pki text.zone-label { fill: var(--pki-zone-border); }
@@ -54,8 +58,8 @@
 
   <rect class="bg" x="0" y="0" width="1200" height="900"/>
 
-  <text class="title" x="600" y="42" text-anchor="middle">Step CA Demo Lab — Architettura</text>
-  <text class="subtitle" x="600" y="64" text-anchor="middle">Docker Compose · singola VM · v1.1</text>
+  <text class="title" x="600" y="42" text-anchor="middle">Step CA Demo Lab — Architecture</text>
+  <text class="subtitle" x="600" y="64" text-anchor="middle">Docker Compose · single VM · v1.1</text>
 
   <!-- Clients row -->
   <g>
@@ -66,12 +70,12 @@
 
     <rect class="chip-rect" x="330" y="90" width="260" height="60" rx="16"/>
     <text class="icon" x="356" y="128" text-anchor="middle">🗄️</text>
-    <text class="chip-title" x="382" y="116">Tool DB</text>
+    <text class="chip-title" x="382" y="116">DB Tool</text>
     <text class="chip-sub" x="382" y="134">5432 · 3306 · 1433</text>
 
     <rect class="chip-rect" x="610" y="90" width="260" height="60" rx="16"/>
     <text class="icon" x="636" y="128" text-anchor="middle">📡</text>
-    <text class="chip-title" x="662" y="116">Client MQTT</text>
+    <text class="chip-title" x="662" y="116">MQTT Client</text>
     <text class="chip-sub" x="662" y="134">MQTTS 8883 · WSS 443</text>
 
     <rect class="chip-rect" x="890" y="90" width="260" height="60" rx="16"/>
@@ -87,19 +91,19 @@
   <text class="chip-sub" x="536" y="234">Reverse proxy · ACME client</text>
 
   <!-- Arrows: browser -> Caddy -->
-  <path class="conn" d="M180,150 L600,185" marker-end="url(#arrow)"/>
+  <path class="conn" d="M180,150 L600,185" marker-end="url(#arrow-https)"/>
   <!-- Arrows: mqtt/db/ot clients -> bypass Caddy, direct dashed down to lower zones -->
-  <path class="conn-dashed" d="M460,150 C450,300 480,480 560,580" marker-end="url(#arrow)"/>
-  <path class="conn-dashed" d="M740,150 C780,300 830,480 880,580" marker-end="url(#arrow)"/>
-  <path class="conn-dashed" d="M1020,150 C1010,300 1000,480 1000,580" marker-end="url(#arrow)"/>
+  <path class="conn-dashed" d="M460,150 C450,300 480,480 560,580" marker-end="url(#arrow-direct)"/>
+  <path class="conn-dashed" d="M740,150 C780,300 830,480 880,580" marker-end="url(#arrow-direct)"/>
+  <path class="conn-dashed" d="M1020,150 C1010,300 1000,480 1000,580" marker-end="url(#arrow-direct)"/>
 
   <!-- Caddy -> web apps zone -->
-  <path class="conn" d="M600,255 L600,300" marker-end="url(#arrow)"/>
+  <path class="conn" d="M600,255 L600,300" marker-end="url(#arrow-https)"/>
 
   <!-- Web apps zone -->
   <g class="zone-web">
     <rect x="40" y="300" width="1120" height="200" rx="20" fill="var(--web-zone)" stroke="var(--web-zone-border)" stroke-width="1.5" stroke-dasharray="8 6"/>
-    <text class="zone-label" x="64" y="322">rete "web"</text>
+    <text class="zone-label" x="64" y="322">"web" network</text>
 
     <rect class="chip-rect" x="60" y="335" width="250" height="60" rx="14"/>
     <text class="icon" x="86" y="373" text-anchor="middle">🖥️</text>
@@ -145,28 +149,28 @@
   <!-- Lower network zones -->
   <g class="zone-pki">
     <rect x="40" y="540" width="350" height="250" rx="20" fill="var(--pki-zone)" stroke="var(--pki-zone-border)" stroke-width="1.5" stroke-dasharray="8 6"/>
-    <text class="zone-label" x="64" y="562">rete "pki"</text>
+    <text class="zone-label" x="64" y="562">"pki" network</text>
 
     <rect class="chip-rect" x="65" y="580" width="300" height="60" rx="14"/>
     <text class="icon" x="94" y="618" text-anchor="middle">🔐</text>
     <text class="chip-title" x="122" y="606">step-ca</text>
-    <text class="chip-sub" x="122" y="624">motore CA · :9000 (pubblicato)</text>
+    <text class="chip-sub" x="122" y="624">CA engine · :9000 (published)</text>
 
     <rect class="chip-rect" x="65" y="655" width="300" height="60" rx="14"/>
     <text class="icon" x="94" y="693" text-anchor="middle">🐘</text>
     <text class="chip-title" x="122" y="681">PostgreSQL</text>
-    <text class="chip-sub" x="122" y="699">DB di step-ca · :5432</text>
+    <text class="chip-sub" x="122" y="699">step-ca's DB · :5432</text>
 
-    <path class="conn" d="M215,640 L215,655"/>
+    <path class="wire" d="M215,640 L215,655"/>
   </g>
 
   <g class="zone-db">
     <rect x="420" y="540" width="350" height="250" rx="20" fill="var(--db-zone)" stroke="var(--db-zone-border)" stroke-width="1.5" stroke-dasharray="8 6"/>
-    <text class="zone-label" x="444" y="562">rete "database"</text>
+    <text class="zone-label" x="444" y="562">"database" network</text>
 
     <rect class="chip-rect" x="445" y="580" width="300" height="46" rx="12" stroke-dasharray="4 3"/>
     <text class="icon" x="474" y="609" text-anchor="middle">🐘</text>
-    <text class="chip-title" x="500" y="608">PostgreSQL (condiviso)</text>
+    <text class="chip-title" x="500" y="608">PostgreSQL (shared)</text>
 
     <rect class="chip-rect" x="445" y="638" width="300" height="60" rx="14"/>
     <text class="icon" x="474" y="676" text-anchor="middle">🐬</text>
@@ -181,7 +185,7 @@
 
   <g class="zone-direct">
     <rect x="800" y="540" width="360" height="250" rx="20" fill="var(--direct-zone)" stroke="var(--direct-zone-border)" stroke-width="1.5" stroke-dasharray="8 6"/>
-    <text class="zone-label" x="824" y="562">servizi esposti direttamente</text>
+    <text class="zone-label" x="824" y="562">directly exposed services</text>
 
     <rect class="chip-rect" x="825" y="580" width="310" height="60" rx="14"/>
     <text class="icon" x="854" y="618" text-anchor="middle">🗂️</text>
@@ -195,32 +199,35 @@
   </g>
 
   <!-- CloudBeaver -> database network -->
-  <path class="conn-dashed" d="M480,470 C500,500 520,520 570,540" marker-end="url(#arrow)"/>
+  <path class="conn-dashed" d="M480,470 C500,500 520,520 570,540" marker-end="url(#arrow-direct)"/>
 
   <!-- step-ca issues certs to OpenLDAP and Mosquitto -->
-  <path class="conn-dotted" d="M365,600 C550,470 700,470 855,590" marker-end="url(#arrowdot)"/>
-  <path class="conn-dotted" d="M365,625 C560,700 700,700 855,670" marker-end="url(#arrowdot)"/>
+  <path class="conn-dotted" d="M365,600 C550,470 700,470 855,590" marker-end="url(#arrow-cert)"/>
+  <path class="conn-dotted" d="M365,625 C560,700 700,700 855,670" marker-end="url(#arrow-cert)"/>
 
   <!-- Arrow marker defs -->
   <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/>
+    <marker id="arrow-https" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrow-https" d="M0,0 L10,5 L0,10 z"/>
     </marker>
-    <marker id="arrowdot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/>
+    <marker id="arrow-direct" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrow-direct" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+    <marker id="arrow-cert" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path class="arrow-cert" d="M0,0 L10,5 L0,10 z"/>
     </marker>
   </defs>
 
   <!-- Legend -->
   <g>
     <line x1="60" y1="836" x2="110" y2="836" class="conn"/>
-    <text class="legend-text" x="118" y="840">HTTPS via Caddy (ACME di step-ca)</text>
+    <text class="legend-text" x="118" y="840">HTTPS via Caddy (step-ca's ACME)</text>
 
     <line x1="440" y1="836" x2="490" y2="836" class="conn-dashed"/>
-    <text class="legend-text" x="498" y="840">Connessione diretta (TCP/TLS)</text>
+    <text class="legend-text" x="498" y="840">Direct connection (TCP/TLS)</text>
 
     <line x1="820" y1="836" x2="870" y2="836" class="conn-dotted"/>
-    <text class="legend-text" x="878" y="840">Emissione certificati (step-ca)</text>
+    <text class="legend-text" x="878" y="840">Certificate issuance (step-ca)</text>
   </g>
 
   <text class="legend-text" x="1140" y="880" text-anchor="end">Step CA Demo Lab · v1.1</text>
