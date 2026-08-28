@@ -1,0 +1,341 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: stepca-db
+    restart: unless-stopped
+    networks: [pki, database]
+    ports:
+      - "${POSTGRES_BIND_IP:-0.0.0.0}:5432:5432"
+    environment:
+      POSTGRES_USER: stepca
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: stepca
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stepca -d stepca"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  step-ca:
+    image: smallstep/step-ca:latest
+    container_name: step-ca
+    restart: unless-stopped
+    networks: [pki, web]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "9000:9000"
+    volumes:
+      - step:/home/step
+    environment:
+      DOCKER_STEPCA_INIT_NAME: ${CA_NAME}
+      DOCKER_STEPCA_INIT_DNS_NAMES: localhost,step-ca,${HOSTNAME_FQDN},${HOST_IP}
+      DOCKER_STEPCA_INIT_PROVISIONER_NAME: admin
+      DOCKER_STEPCA_INIT_PASSWORD: ${STEPCA_PASSWORD}
+      DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT: "true"
+    healthcheck:
+      test: ["CMD", "step", "ca", "health", "--ca-url", "https://localhost:9000", "--root", "/home/step/certs/root_ca.crt"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    networks:
+      web:
+        aliases:
+          - stepca.${HOSTNAME_FQDN}
+          - portainer.${HOSTNAME_FQDN}
+          - keycloak.${HOSTNAME_FQDN}
+          - influxdb.${HOSTNAME_FQDN}
+          - ldapadmin.${HOSTNAME_FQDN}
+          - cloudbeaver.${HOSTNAME_FQDN}
+          - mqtt.${HOSTNAME_FQDN}
+          - mqttws.${HOSTNAME_FQDN}
+          - certificates.${HOSTNAME_FQDN}
+    depends_on:
+      step-ca:
+        condition: service_healthy
+      stepca-web:
+        condition: service_started
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./root_ca.crt:/etc/caddy/root_ca.crt:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  stepca-web:
+    build: ./stepca-web
+    container_name: stepca-web
+    restart: unless-stopped
+    networks: [pki, web]
+    depends_on:
+      step-ca:
+        condition: service_healthy
+      openldap:
+        condition: service_healthy
+    expose: ["5000"]
+    environment:
+      SECRET_KEY: ${STEPCA_WEB_SECRET_KEY}
+      AUTH_BACKEND: ldap
+      LDAPTLS_CACERT: /etc/ssl/certs/root_ca.crt
+    volumes:
+      - step:/home/step:ro
+      - ./settings.json:/app/settings.json:ro
+      - ./jwk_key.json:/app/jwk_key.json:ro
+      - ./root_ca.crt:/etc/ssl/certs/root_ca.crt:ro
+
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: unless-stopped
+    networks: [web]
+    expose: ["9000"]
+    # Pre-provisions the admin account from PORTAINER_ADMIN_PASSWORD on first
+    # start so the manual setup-token wizard never appears; see prepare-mqtt.sh
+    # / prepare-jwk.sh for the same "generate then bind-mount a single secret
+    # file" pattern used elsewhere in this project.
+    command: ["--admin-password-file", "/run/secrets/portainer_admin_password"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+      - ./portainer/secrets/admin_password:/run/secrets/portainer_admin_password:ro
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: keycloak
+    restart: unless-stopped
+    networks: [web]
+    command: start-dev --import-realm --proxy-headers=xforwarded
+    expose: ["8080"]
+    environment:
+      KC_HOSTNAME: https://keycloak.${HOSTNAME_FQDN}
+      KC_HTTP_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+    volumes:
+      - ./realm.json:/opt/keycloak/data/import/realm.json:ro
+      - keycloak_data:/opt/keycloak/data
+
+  influxdb:
+    image: influxdb:2
+    container_name: influxdb
+    restart: unless-stopped
+    networks: [web]
+    expose: ["8086"]
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_ADMIN_PASSWORD}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_ORG}
+      DOCKER_INFLUXDB_INIT_BUCKET: default
+    volumes:
+      - influx_data:/var/lib/influxdb2
+      - influx_config:/etc/influxdb2
+
+  openldap:
+    image: vegardit/openldap:latest
+    container_name: openldap
+    hostname: ldap.${HOSTNAME_FQDN}
+    restart: unless-stopped
+    networks:
+      web:
+        aliases: [openldap, "ldap.${HOSTNAME_FQDN}"]
+      pki: {}
+    ports:
+      - "389:389"
+      - "636:636"
+    environment:
+      LDAP_INIT_ORG_DN: dc=${HOSTNAME_FQDN}
+      LDAP_INIT_ORG_NAME: ${LDAP_INIT_ORG_NAME}
+      LDAP_INIT_ROOT_USER_DN: uid=admin,dc=${HOSTNAME_FQDN}
+      LDAP_INIT_ROOT_USER_PW_FILE: /run/secrets/ldap-admin-password
+      LDAP_INIT_ADMIN_GROUP_DN: cn=ldap-admins,ou=Groups,dc=${HOSTNAME_FQDN}
+      LDAP_INIT_ALLOW_CONFIG_ACCESS: "true"
+      LDAP_INIT_ALLOW_ANONYMOUS_ROOT_DSE: "true"
+      LDAP_TLS_ENABLED: "true"
+      LDAP_LDAPS_ENABLED: "true"
+      LDAP_TLS_CERT_FILE: /run/secrets/ldap/server.crt
+      LDAP_TLS_KEY_FILE: /run/secrets/ldap/server.key
+      LDAP_TLS_CA_FILE: /run/secrets/ldap/ca.crt
+      LDAP_TLS_VERIFY_CLIENT: never
+      TZ: Europe/Rome
+    volumes:
+      - ldap_data:/var/lib/ldap
+      - ldap_config:/etc/ldap/slapd.d
+      - ./ldap/certs/ldap.crt:/run/secrets/ldap/server.crt:ro
+      - ./ldap/certs/ldap.key:/run/secrets/ldap/server.key:ro
+      - ./root_ca.crt:/run/secrets/ldap/ca.crt:ro
+      - ./ldap/secrets/ldap-admin-password:/run/secrets/ldap-admin-password:ro
+    healthcheck:
+      test: ["CMD-SHELL", "LDAPTLS_CACERT=/run/secrets/ldap/ca.crt ldapsearch -x -H ldaps://localhost:636 -b '' -s base '(objectClass=*)' namingContexts >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 20s
+
+  phpldapadmin:
+    image: phpldapadmin/phpldapadmin:latest
+    container_name: phpldapadmin
+    restart: unless-stopped
+    networks: [web]
+    depends_on:
+      openldap:
+        condition: service_healthy
+    expose: ["8080"]
+    environment:
+      APP_KEY: ${PHPLDAPADMIN_APP_KEY}
+      APP_TIMEZONE: Europe/Rome
+      APP_DEBUG: "false"
+      LDAP_NAME: LII1SVR OpenLDAP
+      LDAP_HOST: openldap
+      LDAP_PORT: "636"
+      LDAP_BASE_DN: dc=${HOSTNAME_FQDN}
+      LDAP_CONNECTION: ldaps
+      LDAP_LOGIN_ATTR: DN
+      LDAP_LOGIN_OBJECTCLASS: inetOrgPerson
+      LDAP_ALLOW_GUEST: "false"
+      LDAP_USERNAME: uid=webadmin,ou=Internal,ou=Users,dc=${HOSTNAME_FQDN}
+      LDAP_PASSWORD: ${LDAP_ADMIN_PASSWORD}
+      LDAP_ALERT_ROOTDN: "false"
+      LDAPTLS_CACERT: /etc/ssl/certs/root_ca.crt
+    volumes:
+      - ./root_ca.crt:/etc/ssl/certs/root_ca.crt:ro
+
+  mysql:
+    image: mysql:8.4
+    container_name: mysql-db
+    restart: unless-stopped
+    networks: [database]
+    ports:
+      - "${MYSQL_BIND_IP:-0.0.0.0}:3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: mssql-db
+    restart: unless-stopped
+    networks: [database]
+    ports:
+      - "${MSSQL_BIND_IP:-0.0.0.0}:1433:1433"
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+    volumes:
+      - mssql_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+
+  cloudbeaver:
+    image: dbeaver/cloudbeaver:26.1
+    container_name: cloudbeaver
+    restart: unless-stopped
+    networks: [web, database]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose: ["8978"]
+    environment:
+      CLOUDBEAVER_ADMIN_USER: ${CLOUDBEAVER_ADMIN_USER}
+      CLOUDBEAVER_ADMIN_PASSWORD: ${CLOUDBEAVER_ADMIN_PASSWORD}
+      # CloudBeaver's own "Automatic server configuration" mechanism (distinct
+      # from initial-data.conf below, which only pre-seeds the admin/team
+      # *records* in its internal database): setting these skips the
+      # "Configure Server" wizard's own gate entirely on first start.
+      CB_SERVER_NAME: "Step CA Demo Lab CloudBeaver"
+      CB_SERVER_URL: https://cloudbeaver.${HOSTNAME_FQDN}/
+      CB_ADMIN_NAME: ${CLOUDBEAVER_ADMIN_USER}
+      CB_ADMIN_PASSWORD: ${CLOUDBEAVER_ADMIN_PASSWORD}
+    volumes:
+      - cloudbeaver_data:/opt/cloudbeaver/workspace
+      - ./cloudbeaver/initial-data.conf:/opt/cloudbeaver/conf/initial-data.conf:ro
+
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: mosquitto
+    restart: unless-stopped
+    networks: [web]
+    ports:
+      - "${MQTT_BIND_IP:-0.0.0.0}:8883:8883"
+      - "${MQTT_BIND_IP:-0.0.0.0}:1883:1883"
+    environment:
+      MQTT_USERNAME: ${MQTT_USERNAME}
+      MQTT_PASSWORD: ${MQTT_PASSWORD}
+    volumes:
+      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/certs/server.crt:/mosquitto/certs/server.crt:ro
+      - ./mosquitto/certs/server.key:/mosquitto/certs/server.key:ro
+      - ./mosquitto/certs/ca.crt:/mosquitto/certs/ca.crt:ro
+      - ./mosquitto/secrets/mosquitto.passwd:/mosquitto/secrets/mosquitto.passwd:ro
+      - mosquitto_data:/mosquitto/data
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_pub -h localhost -p 8883 --cafile /mosquitto/certs/ca.crt -u \"$$MQTT_USERNAME\" -P \"$$MQTT_PASSWORD\" -t healthcheck -m ok -i healthcheck || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 15s
+
+  mqttx-web:
+    image: emqx/mqttx-web:v1.13.0
+    container_name: mqttx-web
+    restart: unless-stopped
+    networks: [web]
+    expose: ["80"]
+
+  cert-portal:
+    image: nginx:1.27-alpine
+    container_name: cert-portal
+    restart: unless-stopped
+    networks: [web]
+    expose: ["80"]
+    volumes:
+      - ./certs-portal/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs-portal/public:/usr/share/nginx/html:ro
+
+networks:
+  pki:
+    internal: true
+  web:
+  database:
+
+volumes:
+  step:
+  pgdata:
+  caddy_data:
+  caddy_config:
+  portainer_data:
+  keycloak_data:
+  influx_data:
+  influx_config:
+  ldap_data:
+  ldap_config:
+  mysql_data:
+  mssql_data:
+  cloudbeaver_data:
+  mosquitto_data:

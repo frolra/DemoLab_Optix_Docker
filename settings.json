@@ -1,0 +1,5 @@
+{
+  "database": {"host":"postgres","port":"5432","user":"stepca","password":"SET_BY_INSTALL_SH","name":"stepca"},
+  "ca": {"url":"https://step-ca:9000","fingerprint":"SET_BY_INSTALL_SH","admin_provisioner_name":"SET_BY_INSTALL_SH"},
+  "ldap": {"url":"ldaps://openldap:636","base_dn":"dc=lii1svr-ubu24dock","domain":"lii1svr-ubu24dock","user_search_filter":"(uid={username})","user_search_base":"dc=lii1svr-ubu24dock","ldap_required_group_dn":"cn=ldap-admins,ou=Groups,dc=lii1svr-ubu24dock"}
+}

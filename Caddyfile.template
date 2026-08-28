@@ -1,0 +1,91 @@
+{
+    email admin@${HOSTNAME_FQDN}
+}
+
+(stepca) {
+    tls {
+        issuer acme {
+            dir https://step-ca:9000/acme/acme/directory
+            trusted_roots /etc/caddy/root_ca.crt
+        }
+    }
+}
+
+stepca.${HOSTNAME_FQDN} {
+    import stepca
+    reverse_proxy stepca-web:5000
+}
+
+portainer.${HOSTNAME_FQDN} {
+    import stepca
+    reverse_proxy portainer:9000
+}
+
+keycloak.${HOSTNAME_FQDN} {
+    import stepca
+    reverse_proxy keycloak:8080
+}
+
+influxdb.${HOSTNAME_FQDN} {
+    import stepca
+    reverse_proxy influxdb:8086
+}
+
+ldapadmin.${HOSTNAME_FQDN} {
+    import stepca
+    reverse_proxy phpldapadmin:8080
+}
+
+cloudbeaver.${HOSTNAME_FQDN} {
+    import stepca
+    reverse_proxy cloudbeaver:8978
+}
+
+mqtt.${HOSTNAME_FQDN} {
+    import stepca
+    reverse_proxy mqttx-web:80
+}
+
+mqttws.${HOSTNAME_FQDN} {
+    import stepca
+    reverse_proxy mosquitto:9001
+}
+
+certificates.${HOSTNAME_FQDN} {
+    import stepca
+    reverse_proxy cert-portal:80
+}
+
+# Bootstrap path: a brand-new client has no DNS/hosts entries yet, so it
+# cannot reach certificates.${HOSTNAME_FQDN} by name - but it can always
+# reach the VM by its raw IP with zero configuration. Serve the same
+# Certificate Portal there too, so root_ca.crt and the hosts-file scripts
+# are reachable before any client-side setup exists. Plain HTTP needs no
+# certificate at all, avoiding the chicken-and-egg problem of a private CA
+# issuing a cert for a client that doesn't trust it yet.
+http://${HOST_IP} {
+    reverse_proxy cert-portal:80
+}
+
+# Best-effort HTTPS on the same IP, using the same private ACME issuer as
+# every other site. This still shows a trust warning on a fresh client
+# (same reason as certificates.${HOSTNAME_FQDN} does) and depends on
+# step-ca's ACME provisioner accepting IP identifiers; if it doesn't, this
+# block simply won't obtain a certificate while http://${HOST_IP} above
+# continues to work.
+https://${HOST_IP} {
+    import stepca
+    reverse_proxy cert-portal:80
+}
+
+# Bare hostname, with or without TLS: always send clients straight to the
+# Certificate Portal (same convenience as the raw-IP blocks above), rather
+# than to any one particular service such as Portainer.
+http://${HOSTNAME_FQDN} {
+    redir https://certificates.${HOSTNAME_FQDN}
+}
+
+https://${HOSTNAME_FQDN} {
+    import stepca
+    redir https://certificates.${HOSTNAME_FQDN}
+}

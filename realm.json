@@ -1,0 +1,135 @@
+{
+  "realm": "optixdemo",
+  "displayName": "Optix OAuth2.0 Demo",
+  "displayNameHtml": "Optix OAuth2.0 Demo",
+  "enabled": true,
+  "clients": [
+    {
+      "clientId": "demo-client",
+      "enabled": true,
+      "redirectUris": ["*"],
+      "clientAuthenticatorType": "client-secret",
+      "secret": "demo-secret",
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "publicClient": true,
+      "frontchannelLogout": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "request.object.signature.alg": "any",
+        "request.object.encryption.alg": "any",
+        "client.introspection.response.allow.jwt.claim.enabled": "false",
+        "standard.token.exchange.enabled": "false",
+        "login_theme": "keycloak.v2",
+        "post.logout.redirect.uris": "+",
+        "oauth2.device.authorization.grant.enabled": "true",
+        "backchannel.logout.revoke.offline.tokens": "false",
+        "use.refresh.tokens": "true",
+        "realm_client": "false",
+        "oidc.ciba.grant.enabled": "false",
+        "client.use.lightweight.access.token.enabled": "false",
+        "backchannel.logout.session.required": "true",
+        "request.object.required": "not required",
+        "client_credentials.use_refresh_token": "false",
+        "access.token.header.type.rfc9068": "false",
+        "tls.client.certificate.bound.access.tokens": "false",
+        "require.pushed.authorization.requests": "false",
+        "acr.loa.map": "{}",
+        "display.on.consent.screen": "false",
+        "request.object.encryption.enc": "any",
+        "pkce.code.challenge.method": "S256",
+        "token.response.type.bearer.lower-case": "false"
+      },
+      "authenticationFlowBindingOverrides": {},
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "protocolMappers": [
+        {
+          "name": "aud",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "demo-client",
+            "id.token.claim": "false",
+            "lightweight.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "group",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "false",
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "lightweight.claim": "false",
+            "access.token.claim": "true",
+            "claim.name": "group"
+          }
+        },
+        {
+          "name": "name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "user.attribute": "fullname",
+            "id.token.claim": "true",
+            "lightweight.claim": "false",
+            "access.token.claim": "true",
+            "claim.name": "name",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+  {"username":"user1","firstName":"John","lastName":"Doe","email":"user1@users.com","groups":["OptixUsers","GOI_Admin","GOI_Viewer"],"enabled":true,"emailVerified":true,"credentials":[{"type":"password","value":"password1"}]},
+  {"username":"user2","firstName":"Jane","lastName":"Smith","email":"user2@users.com","groups":["OptixUsers","GOI_Maintenance"],"enabled":true,"emailVerified":true,"credentials":[{"type":"password","value":"password2"}]},
+  {"username":"user3","firstName":"Alice","lastName":"Johnson","email":"user3@users.com","groups":["OptixUsers","GOI_Operator","GOI_Line1_Operator"],"enabled":true,"emailVerified":true,"credentials":[{"type":"password","value":"password3"}]},
+  {"username":"user4","firstName":"Bob","lastName":"Brown","email":"user4@users.com","groups":["OptixUsers","GOI_Line2_Maintenance"],"enabled":true,"emailVerified":true,"credentials":[{"type":"password","value":"password4"}]},
+  {"username":"user5","firstName":"Charlie","lastName":"Davis","email":"user5@users.com","groups":["OptixUsers","GOI_Editor","GOI_Line3_Operator"],"enabled":true,"emailVerified":true,"credentials":[{"type":"password","value":"password5"}]},
+  {"username":"user6","firstName":"Emily","lastName":"Wilson","email":"user6@users.com","groups":["OptixUsers","GOI_Admin"],"enabled":true,"emailVerified":true,"credentials":[{"type":"password","value":"password6"}]},
+  {"username":"user7","firstName":"David","lastName":"Taylor","email":"user7@users.com","groups":["OptixUsers","GOI_Line1_Maintenance","GOI_Viewer"],"enabled":true,"emailVerified":true,"credentials":[{"type":"password","value":"password7"}]},
+  {"username":"user8","firstName":"Sophia","lastName":"Anderson","email":"user8@users.com","groups":["OptixUsers","GOI_Line3_Maintenance"],"enabled":true,"emailVerified":true,"credentials":[{"type":"password","value":"password8"}]},
+  {"username":"user9","firstName":"James","lastName":"Thomas","email":"user9@users.com","groups":["OptixUsers","GOI_Operator"],"enabled":true,"emailVerified":true,"credentials":[{"type":"password","value":"password9"}]},
+  {"username":"user10","firstName":"Olivia","lastName":"Moore","email":"user10@users.com","groups":["OptixUsers","GOI_Line2_Operator","GOI_Editor"],"enabled":true,"emailVerified":true,"credentials":[{"type":"password","value":"password10"}]},
+  {"username":"user11","firstName":"Liam","lastName":"Martin","email":"user11@users.com","groups":["OptixUsers","GOI_Maintenance","GOI_Line1_Operator"],"enabled":true,"emailVerified":true,"credentials":[{"type":"password","value":"password11"}]},
+  {"username":"user12","firstName":"Emma","lastName":"Lee","email":"user12@users.com","groups":["OptixUsers","GOI_Admin","GOI_Line3_Operator"],"enabled":true,"emailVerified":true,"credentials":[{"type":"password","value":"password12"}]},
+  {"username":"user13","firstName":"Noah","lastName":"Perez","email":"user13@users.com","groups":["OptixUsers","GOI_Viewer"],"enabled":true,"emailVerified":true,"credentials":[{"type":"password","value":"password13"}]},
+  {"username":"user14","firstName":"Ava","lastName":"White","email":"user14@users.com","groups":["OptixUsers","GOI_Line2_Maintenance"],"enabled":true,"emailVerified":true,"credentials":[{"type":"password","value":"password14"}]},
+  {"username":"user15","firstName":"Lucas","lastName":"Harris","email":"user15@users.com","groups":["OptixUsers","GOI_Line1_Maintenance","GOI_Operator"],"enabled":true,"emailVerified":true,"credentials":[{"type":"password","value":"password15"}]},
+  {"username":"user16","firstName":"Mia","lastName":"Clark","email":"user16@users.com","groups":["OptixUsers","GOI_Line3_Maintenance"],"enabled":true,"emailVerified":true,"credentials":[{"type":"password","value":"password16"}]},
+  {"username":"user17","firstName":"Ethan","lastName":"Lewis","email":"user17@users.com","groups":["OptixUsers","GOI_Editor","GOI_Line2_Operator"],"enabled":true,"emailVerified":true,"credentials":[{"type":"password","value":"password17"}]},
+  {"username":"user18","firstName":"Isabella","lastName":"Walker","email":"user18@users.com","groups":["OptixUsers","GOI_Admin"],"enabled":true,"emailVerified":true,"credentials":[{"type":"password","value":"password18"}]},
+  {"username":"user19","firstName":"Mason","lastName":"Hall","email":"user19@users.com","groups":["OptixUsers","GOI_Line1_Operator","GOI_Viewer"],"enabled":true,"emailVerified":true,"credentials":[{"type":"password","value":"password19"}]},
+  {"username":"user20","firstName":"Charlotte","lastName":"Allen","email":"user20@users.com","groups":["OptixUsers","GOI_Line3_Operator"],"enabled":true,"emailVerified":true,"credentials":[{"type":"password","value":"password20"}]}
+  ],
+  "groups": [
+    {"name": "GOI_Admin"},
+    {"name": "GOI_Editor"},
+    {"name": "GOI_Viewer"},
+    {"name": "GOI_Maintenance"},
+    {"name": "GOI_Operator"},
+    {"name": "GOI_Line1_Maintenance"},
+    {"name": "GOI_Line1_Operator"},
+    {"name": "GOI_Line2_Maintenance"},
+    {"name": "GOI_Line2_Operator"},
+    {"name": "GOI_Line3_Maintenance"},
+    {"name": "GOI_Line3_Operator"},
+    {"name": "OptixUsers","realmRoles": ["offline_access"]}
+  ]
+}
