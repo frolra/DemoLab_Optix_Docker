@@ -2,7 +2,7 @@
 
 The Certificate Download Portal is a minimal, read-only `nginx:1.27-alpine` container behind Caddy, reachable at `http://<HOST_IP>` (the recommended first stop on a brand-new client — see below) and, once hostnames resolve, at `https://certificates.<HOSTNAME_FQDN>`. It exists so clients that cannot reach the Docker host's filesystem (or an administrator's copy of `root_ca.crt`) can still retrieve the certificates they need to trust the lab's PKI, and it presents them through an Apple-style page that automatically follows the visiting browser's light/dark appearance setting (`prefers-color-scheme`).
 
-The page is a two-column layout: the left column has the certificate/script downloads described below, and the right column, "Web Portals", links directly to every other web UI in the lab (StepCA Web, Portainer, Keycloak, InfluxDB UI, phpLDAPadmin, CloudBeaver, MQTTX Web) built from `HOSTNAME_FQDN`, each opening in a new browser tab (`target="_blank"`) so this portal stays open as a jumping-off point.
+The page is a two-column layout: the left column has the certificate/script downloads described below, and the right column, "Web Portals", links directly to every other web UI in the lab (StepCA Web, Portainer, Keycloak, InfluxDB UI, phpLDAPadmin, CloudBeaver, MQTTX Web, CSR Generator) built from `HOSTNAME_FQDN`, each opening in a new browser tab (`target="_blank"`) so this portal stays open as a jumping-off point.
 
 ## Why it stays on HTTPS (and the warning you'll see on first visit)
 

@@ -2,7 +2,7 @@
 
 Reproducible Docker Compose lab for step-ca, PostgreSQL, Caddy, OpenLDAP/LDAPS, phpLDAPadmin, LDAP-enabled StepCA Web, Keycloak, InfluxDB, and Portainer.
 
-v1.1 extends the lab into a broader FactoryTalk Optix integration toolbox: directly-exposed PostgreSQL, MySQL, and Microsoft SQL Server, a CloudBeaver web UI for all three, Eclipse Mosquitto with MQTTS and MQTT-over-WebSocket, MQTTX Web, and a read-only Certificate Download Portal.
+v1.1 extends the lab into a broader FactoryTalk Optix integration toolbox: directly-exposed PostgreSQL, MySQL, and Microsoft SQL Server, a CloudBeaver web UI for all three, Eclipse Mosquitto with MQTTS and MQTT-over-WebSocket, MQTTX Web, a read-only Certificate Download Portal, and a self-service CSR Generator.
 
 ## Architecture
 
@@ -32,6 +32,7 @@ Before touching Docker at all, `install.sh` validates every value in `.env`: eve
 6. Sign in to CloudBeaver at `https://cloudbeaver.<HOSTNAME_FQDN>` with `CLOUDBEAVER_ADMIN_USER` / `CLOUDBEAVER_ADMIN_PASSWORD` from `.env` (auto-provisioned; the manual first-run wizard is skipped), then add connections for PostgreSQL, MySQL, and SQL Server using the parameters in [docs/DATABASES.md](docs/DATABASES.md).
 7. Connect FactoryTalk Optix or other MQTT clients to `mqtt.<HOSTNAME_FQDN>:8883` over TLS using `MQTT_USERNAME` / `MQTT_PASSWORD` and the imported root CA, or to `<HOST_IP>:1883` with no TLS and no credentials for quick anonymous testing (see [docs/MQTT.md](docs/MQTT.md)).
 8. Download the Root CA, other public certificates, and the hosts-file scripts from `http://<HOST_IP>` (works immediately on a brand-new client, no DNS/hosts entry or certificate warning) or `https://certificates.<HOSTNAME_FQDN>` once that name resolves, if a client cannot reach the Docker host directly.
+9. Generate a CSR and private key at `https://csr.<HOSTNAME_FQDN>` (no login required), then paste the CSR into StepCA Web's **X.509 → Active Certificates → Submit CSR** form to have it signed (see [docs/CSR_GENERATOR.md](docs/CSR_GENERATOR.md)).
 
 ## Services Exposed Directly (v1.1)
 
@@ -54,6 +55,7 @@ Each `*_BIND_IP` variable defaults to `0.0.0.0`; set it to a specific VM interfa
 - [Databases and CloudBeaver](docs/DATABASES.md)
 - [MQTT and Mosquitto](docs/MQTT.md)
 - [Certificate Download Portal](docs/CERTIFICATE_PORTAL.md)
+- [CSR Generator](docs/CSR_GENERATOR.md)
 - [Portainer](docs/PORTAINER.md)
 - [Adding a Web Application](docs/ADDING_WEB_APP.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)

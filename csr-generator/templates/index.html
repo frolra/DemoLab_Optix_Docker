@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSR Generator{% if hostname %} &middot; {{ hostname }}{% endif %}</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f5f5f7;
+    --surface: rgba(255, 255, 255, 0.72);
+    --text: #1d1d1f;
+    --text-secondary: #6e6e73;
+    --accent: #0071e3;
+    --accent-tint: rgba(0, 113, 227, 0.12);
+    --accent-tint-hover: rgba(0, 113, 227, 0.06);
+    --border: rgba(0, 0, 0, 0.08);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+    --code-bg: rgba(0, 0, 0, 0.05);
+    --danger: #d70015;
+    --danger-tint: rgba(215, 0, 21, 0.1);
+    --warning-bg: rgba(255, 159, 10, 0.14);
+    --warning-text: #b25000;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000;
+      --surface: rgba(28, 28, 30, 0.72);
+      --text: #f5f5f7;
+      --text-secondary: #98989d;
+      --accent: #0a84ff;
+      --accent-tint: rgba(10, 132, 255, 0.16);
+      --accent-tint-hover: rgba(10, 132, 255, 0.08);
+      --border: rgba(255, 255, 255, 0.1);
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.4);
+      --code-bg: rgba(255, 255, 255, 0.08);
+      --danger: #ff453a;
+      --danger-tint: rgba(255, 69, 58, 0.16);
+      --warning-bg: rgba(255, 159, 10, 0.18);
+      --warning-text: #ffb340;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.47059;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 64px 24px 96px; }
+  header { text-align: center; margin-bottom: 40px; }
+  header h1 { font-size: 34px; font-weight: 600; letter-spacing: -0.015em; margin: 0 0 12px; }
+  header p { font-size: 17px; color: var(--text-secondary); margin: 0 auto; max-width: 560px; }
+  .badge {
+    display: inline-block; margin-top: 16px; padding: 6px 14px; font-size: 13px; font-weight: 590;
+    color: var(--accent); background: var(--accent-tint); border-radius: 980px;
+  }
+  .card {
+    background: var(--surface);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    padding: 28px;
+    margin-bottom: 24px;
+  }
+  .card h2 { font-size: 19px; font-weight: 600; margin: 0 0 18px; }
+  label { display: block; font-size: 13px; font-weight: 590; color: var(--text-secondary); margin: 0 0 6px; }
+  input[type=text], input[type=password], select {
+    width: 100%; padding: 10px 12px; margin-bottom: 16px; font-size: 15px;
+    border-radius: 10px; border: 1px solid var(--border); background: var(--code-bg);
+    color: var(--text); font-family: inherit;
+  }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+  @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
+  .san-row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+  .san-row select { width: 110px; margin-bottom: 0; flex: 0 0 auto; }
+  .san-row input { margin-bottom: 0; flex: 1 1 auto; }
+  button, .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 10px 18px; font-size: 15px; font-weight: 590; border-radius: 980px;
+    border: none; cursor: pointer; text-decoration: none;
+    background: var(--accent); color: #fff;
+  }
+  button.secondary, .btn.secondary { background: var(--accent-tint); color: var(--accent); }
+  .remove-san { background: var(--danger-tint); color: var(--danger); padding: 8px 12px; flex: 0 0 auto; }
+  .add-san { margin-top: 4px; }
+  .actions { display: flex; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+  .hint { font-size: 12px; color: var(--text-secondary); margin: -10px 0 16px; }
+  .alert { padding: 14px 18px; border-radius: 12px; font-size: 14px; margin-bottom: 24px; }
+  .alert.danger { background: var(--danger-tint); color: var(--danger); }
+  .alert.warning { background: var(--warning-bg); color: var(--warning-text); }
+  textarea {
+    width: 100%; min-height: 140px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12.5px; padding: 12px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--code-bg); color: var(--text); resize: vertical;
+  }
+  .key-mask { position: relative; }
+  .key-mask.hidden textarea { filter: blur(6px); user-select: none; }
+  .key-mask .reveal-btn { position: absolute; top: 10px; right: 10px; z-index: 2; }
+  footer { margin-top: 48px; text-align: center; font-size: 13px; color: var(--text-secondary); }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>CSR Generator</h1>
+    <p>Fill in your certificate's details to generate a Certificate Signing Request and a matching private key. Nothing is stored on the server.</p>
+    <span class="badge">Stateless &middot; no login required</span>
+  </header>
+
+  {% if error %}
+  <div class="alert danger">{{ error }}</div>
+  {% endif %}
+
+  {% if not result %}
+  <form method="post" action="{{ url_for('generate') }}" id="csrForm">
+    <div class="card">
+      <h2>Subject</h2>
+      <label for="common_name">Common Name (CN) *</label>
+      <input type="text" id="common_name" name="common_name" placeholder="mydevice.example.com" required maxlength="64" value="{{ form.common_name if form else '' }}">
+
+      <div class="row">
+        <div>
+          <label for="organization">Organization (O)</label>
+          <input type="text" id="organization" name="organization" maxlength="128" value="{{ form.organization if form else '' }}">
+        </div>
+        <div>
+          <label for="organizational_unit">Organizational Unit (OU)</label>
+          <input type="text" id="organizational_unit" name="organizational_unit" maxlength="128" value="{{ form.organizational_unit if form else '' }}">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="country">Country (C)</label>
+          <input type="text" id="country" name="country" maxlength="2" placeholder="IT" value="{{ form.country if form else '' }}">
+        </div>
+        <div>
+          <label for="state">State / Province (ST)</label>
+          <input type="text" id="state" name="state" maxlength="128" value="{{ form.state if form else '' }}">
+        </div>
+      </div>
+      <label for="locality">Locality (L)</label>
+      <input type="text" id="locality" name="locality" maxlength="128" value="{{ form.locality if form else '' }}">
+    </div>
+
+    <div class="card">
+      <h2>Subject Alternative Names</h2>
+      <p class="hint">Recommended: add at least one DNS name or IP address matching how clients will reach this certificate.</p>
+      <div id="sanRows"></div>
+      <button type="button" class="secondary add-san" id="addSanBtn">+ Add name</button>
+    </div>
+
+    <div class="card">
+      <h2>Key</h2>
+      <div class="row">
+        <div>
+          <label for="key_type">Key type</label>
+          <select id="key_type" name="key_type">
+            {% for value, label in key_types.items() %}
+            <option value="{{ value }}" {% if form and form.key_type == value %}selected{% elif not form and value == 'rsa2048' %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="key_passphrase">Private key passphrase (optional)</label>
+          <input type="password" id="key_passphrase" name="key_passphrase" placeholder="Leave blank for an unencrypted key">
+        </div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button type="submit">Generate CSR &amp; Key</button>
+    </div>
+  </form>
+
+  <template id="sanRowTemplate">
+    <div class="san-row">
+      <select name="san_type[]">
+        <option value="dns">DNS</option>
+        <option value="ip">IP</option>
+      </select>
+      <input type="text" name="san_value[]" placeholder="mydevice.example.com or 192.0.2.10">
+      <button type="button" class="remove-san">&times;</button>
+    </div>
+  </template>
+
+  <script>
+    const sanRows = document.getElementById('sanRows');
+    const sanTemplate = document.getElementById('sanRowTemplate');
+    function addSanRow() {
+      const clone = sanTemplate.content.cloneNode(true);
+      clone.querySelector('.remove-san').addEventListener('click', function (e) {
+        e.target.closest('.san-row').remove();
+      });
+      sanRows.appendChild(clone);
+    }
+    document.getElementById('addSanBtn').addEventListener('click', addSanRow);
+    addSanRow();
+  </script>
+
+  {% else %}
+  <div class="alert warning">
+    This private key is generated for this request only and is <strong>never stored</strong> on the server.
+    Copy or download it now &mdash; it cannot be recovered after you leave this page.
+  </div>
+
+  <div class="card">
+    <h2>Certificate Signing Request</h2>
+    <textarea id="csrText" readonly>{{ result.csr_pem }}</textarea>
+    <div class="actions">
+      <button type="button" class="secondary" onclick="copyField('csrText')">Copy CSR</button>
+      <button type="button" class="secondary" onclick="downloadField('csrText', '{{ result.filename }}.csr')">Download .csr</button>
+    </div>
+    <p class="hint">Paste this into StepCA Web's <strong>X.509 &rarr; Active Certificates &rarr; Submit CSR</strong> form to have it signed.</p>
+  </div>
+
+  <div class="card">
+    <h2>Private Key</h2>
+    <div class="key-mask hidden" id="keyMask">
+      <button type="button" class="secondary reveal-btn" onclick="revealKey()">Show</button>
+      <textarea id="keyText" readonly>{{ result.key_pem }}</textarea>
+    </div>
+    <div class="actions">
+      <button type="button" class="secondary" onclick="copyField('keyText')">Copy Key</button>
+      <button type="button" class="secondary" onclick="downloadField('keyText', '{{ result.filename }}.key')">Download .key</button>
+    </div>
+  </div>
+
+  <div class="actions">
+    <a class="btn secondary" href="{{ url_for('index') }}">Generate another</a>
+  </div>
+
+  <script>
+    function copyField(id) {
+      navigator.clipboard.writeText(document.getElementById(id).value);
+    }
+    function downloadField(id, filename) {
+      const value = document.getElementById(id).value;
+      const blob = new Blob([value], { type: 'application/x-pem-file' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+    function revealKey() {
+      document.getElementById('keyMask').classList.remove('hidden');
+    }
+  </script>
+  {% endif %}
+
+  <footer>CSR Generator &middot; Step CA Demo Lab</footer>
+</div>
+</body>
+</html>

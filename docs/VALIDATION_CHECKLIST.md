@@ -50,6 +50,8 @@ Confirm every service reports `running`/`healthy` as applicable.
 - [ ] MQTTX Web at `https://mqtt.<HOSTNAME_FQDN>` connects over WSS via `mqttws.<HOSTNAME_FQDN>`
 - [ ] Certificate Portal at `http://<HOST_IP>` (first-boot path) or `https://certificates.<HOSTNAME_FQDN>` (once hostnames resolve) serves `root_ca.crt`, `root_ca.der`, `intermediate_ca.crt`, `ca_chain.crt`, `mqtt_server.crt`, and `certificate-manifest.txt`, plus the "Web Portals" links to every other UI
 - [ ] Web Portal links on the Certificate Portal each open their target in a new tab and load correctly (once `root_ca.crt` is imported)
+- [ ] CSR Generator at `https://csr.<HOSTNAME_FQDN>` requires no login; generating a CSR produces a signature-valid CSR (verify with `step certificate inspect` or `openssl req -verify -noout` if available) whose Subject/SANs match the form input, and a matching, parseable private key; the `/generate` response has `Cache-Control: no-store`
+- [ ] The CSR produced by the CSR Generator can be pasted into StepCA Web's **X.509 → Active Certificates → Submit CSR** form (JWK provisioner + `STEPCA_PASSWORD`) and signed successfully, and the resulting certificate downloads correctly
 - [ ] No CA or service private key (`root_ca_key`, `intermediate_ca_key`, `jwk_key.json`, `mosquitto/certs/server.key`) is reachable from the Certificate Portal
 - [ ] `jwk_key.json` is absent from `git status`/`git ls-files` (generated and gitignored, never committed)
 - [ ] No database, MQTT, JWK, or private-key secret appears in `install.sh` output

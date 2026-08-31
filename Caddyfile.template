@@ -56,6 +56,11 @@ certificates.${HOSTNAME_FQDN} {
     reverse_proxy cert-portal:80
 }
 
+csr.${HOSTNAME_FQDN} {
+    import stepca
+    reverse_proxy csr-generator:8000
+}
+
 # Bootstrap path: a brand-new client has no DNS/hosts entries yet, so it
 # cannot reach certificates.${HOSTNAME_FQDN} by name - but it can always
 # reach the VM by its raw IP with zero configuration. Serve the same

@@ -60,6 +60,7 @@ services:
           - mqtt.${HOSTNAME_FQDN}
           - mqttws.${HOSTNAME_FQDN}
           - certificates.${HOSTNAME_FQDN}
+          - csr.${HOSTNAME_FQDN}
     depends_on:
       step-ca:
         condition: service_healthy
@@ -318,6 +319,15 @@ services:
     volumes:
       - ./certs-portal/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./certs-portal/public:/usr/share/nginx/html:ro
+
+  csr-generator:
+    build: ./csr-generator
+    container_name: csr-generator
+    restart: unless-stopped
+    networks: [web]
+    expose: ["8000"]
+    environment:
+      HOSTNAME_FQDN: ${HOSTNAME_FQDN}
 
 networks:
   pki:

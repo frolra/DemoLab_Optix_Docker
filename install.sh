@@ -594,6 +594,11 @@ cat > certs-portal/public/index.html <<EOF_HTML
         <span class="meta"><span class="name">MQTTX Web</span><span class="desc">mqtt.${HOSTNAME_FQDN}</span></span>
         <span class="chevron">&#8599;</span>
       </a>
+      <a class="item" href="https://csr.${HOSTNAME_FQDN}" target="_blank" rel="noopener noreferrer">
+        <span class="icon">&#128221;</span>
+        <span class="meta"><span class="name">CSR Generator</span><span class="desc">csr.${HOSTNAME_FQDN}</span></span>
+        <span class="chevron">&#8599;</span>
+      </a>
     </div>
     <p class="chip-note">Links open in a new tab. Each site uses the same private CA, so import <code>root_ca.crt</code> first to avoid a browser warning.</p>
   </section>
