@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 975" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
   <style>
     :root {
       --bg: #f5f5f7;
@@ -56,7 +56,7 @@
     .zone-direct text.zone-label { fill: var(--direct-zone-border); }
   </style>
 
-  <rect class="bg" x="0" y="0" width="1200" height="900"/>
+  <rect class="bg" x="0" y="0" width="1200" height="975"/>
 
   <text class="title" x="600" y="42" text-anchor="middle">Step CA Demo Lab — Architecture</text>
   <text class="subtitle" x="600" y="64" text-anchor="middle">Docker Compose · single VM · v1.1</text>
@@ -93,16 +93,16 @@
   <!-- Arrows: browser -> Caddy -->
   <path class="conn" d="M180,150 L600,185" marker-end="url(#arrow-https)"/>
   <!-- Arrows: mqtt/db/ot clients -> bypass Caddy, direct dashed down to lower zones -->
-  <path class="conn-dashed" d="M460,150 C450,300 480,480 560,580" marker-end="url(#arrow-direct)"/>
-  <path class="conn-dashed" d="M740,150 C780,300 830,480 880,580" marker-end="url(#arrow-direct)"/>
-  <path class="conn-dashed" d="M1020,150 C1010,300 1000,480 1000,580" marker-end="url(#arrow-direct)"/>
+  <path class="conn-dashed" d="M460,150 C450,300 480,555 560,655" marker-end="url(#arrow-direct)"/>
+  <path class="conn-dashed" d="M740,150 C780,300 830,555 880,655" marker-end="url(#arrow-direct)"/>
+  <path class="conn-dashed" d="M1020,150 C1010,300 1000,555 1000,655" marker-end="url(#arrow-direct)"/>
 
   <!-- Caddy -> web apps zone -->
   <path class="conn" d="M600,255 L600,300" marker-end="url(#arrow-https)"/>
 
   <!-- Web apps zone -->
   <g class="zone-web">
-    <rect x="40" y="300" width="1120" height="200" rx="20" fill="var(--web-zone)" stroke="var(--web-zone-border)" stroke-width="1.5" stroke-dasharray="8 6"/>
+    <rect x="40" y="300" width="1120" height="275" rx="20" fill="var(--web-zone)" stroke="var(--web-zone-border)" stroke-width="1.5" stroke-dasharray="8 6"/>
     <text class="zone-label" x="64" y="322">"web" network</text>
 
     <rect class="chip-rect" x="60" y="335" width="250" height="60" rx="14"/>
@@ -144,66 +144,71 @@
     <text class="icon" x="896" y="448" text-anchor="middle">📜</text>
     <text class="chip-title" x="922" y="436">Cert. Portal</text>
     <text class="chip-sub" x="922" y="454">certificates.&lt;host&gt;</text>
+
+    <rect class="chip-rect" x="465" y="485" width="250" height="60" rx="14"/>
+    <text class="icon" x="491" y="523" text-anchor="middle">📝</text>
+    <text class="chip-title" x="517" y="511">CSR Generator</text>
+    <text class="chip-sub" x="517" y="529">csr.&lt;host&gt;</text>
   </g>
 
   <!-- Lower network zones -->
   <g class="zone-pki">
-    <rect x="40" y="540" width="350" height="250" rx="20" fill="var(--pki-zone)" stroke="var(--pki-zone-border)" stroke-width="1.5" stroke-dasharray="8 6"/>
-    <text class="zone-label" x="64" y="562">"pki" network</text>
-
-    <rect class="chip-rect" x="65" y="580" width="300" height="60" rx="14"/>
-    <text class="icon" x="94" y="618" text-anchor="middle">🔐</text>
-    <text class="chip-title" x="122" y="606">step-ca</text>
-    <text class="chip-sub" x="122" y="624">CA engine · :9000 (published)</text>
+    <rect x="40" y="615" width="350" height="250" rx="20" fill="var(--pki-zone)" stroke="var(--pki-zone-border)" stroke-width="1.5" stroke-dasharray="8 6"/>
+    <text class="zone-label" x="64" y="637">"pki" network</text>
 
     <rect class="chip-rect" x="65" y="655" width="300" height="60" rx="14"/>
-    <text class="icon" x="94" y="693" text-anchor="middle">🐘</text>
-    <text class="chip-title" x="122" y="681">PostgreSQL</text>
-    <text class="chip-sub" x="122" y="699">step-ca's DB · :5432</text>
+    <text class="icon" x="94" y="693" text-anchor="middle">🔐</text>
+    <text class="chip-title" x="122" y="681">step-ca</text>
+    <text class="chip-sub" x="122" y="699">CA engine · :9000 (published)</text>
 
-    <path class="wire" d="M215,640 L215,655"/>
+    <rect class="chip-rect" x="65" y="730" width="300" height="60" rx="14"/>
+    <text class="icon" x="94" y="768" text-anchor="middle">🐘</text>
+    <text class="chip-title" x="122" y="756">PostgreSQL</text>
+    <text class="chip-sub" x="122" y="774">step-ca's DB · :5432</text>
+
+    <path class="wire" d="M215,715 L215,730"/>
   </g>
 
   <g class="zone-db">
-    <rect x="420" y="540" width="350" height="250" rx="20" fill="var(--db-zone)" stroke="var(--db-zone-border)" stroke-width="1.5" stroke-dasharray="8 6"/>
-    <text class="zone-label" x="444" y="562">"database" network</text>
+    <rect x="420" y="615" width="350" height="250" rx="20" fill="var(--db-zone)" stroke="var(--db-zone-border)" stroke-width="1.5" stroke-dasharray="8 6"/>
+    <text class="zone-label" x="444" y="637">"database" network</text>
 
-    <rect class="chip-rect" x="445" y="580" width="300" height="46" rx="12" stroke-dasharray="4 3"/>
-    <text class="icon" x="474" y="609" text-anchor="middle">🐘</text>
-    <text class="chip-title" x="500" y="608">PostgreSQL (shared)</text>
-
-    <rect class="chip-rect" x="445" y="638" width="300" height="60" rx="14"/>
-    <text class="icon" x="474" y="676" text-anchor="middle">🐬</text>
-    <text class="chip-title" x="502" y="664">MySQL</text>
-    <text class="chip-sub" x="502" y="682">:3306</text>
+    <rect class="chip-rect" x="445" y="655" width="300" height="46" rx="12" stroke-dasharray="4 3"/>
+    <text class="icon" x="474" y="684" text-anchor="middle">🐘</text>
+    <text class="chip-title" x="500" y="683">PostgreSQL (shared)</text>
 
     <rect class="chip-rect" x="445" y="713" width="300" height="60" rx="14"/>
-    <text class="icon" x="474" y="751" text-anchor="middle">🗄️</text>
-    <text class="chip-title" x="502" y="739">SQL Server</text>
-    <text class="chip-sub" x="502" y="757">:1433</text>
+    <text class="icon" x="474" y="751" text-anchor="middle">🐬</text>
+    <text class="chip-title" x="502" y="739">MySQL</text>
+    <text class="chip-sub" x="502" y="757">:3306</text>
+
+    <rect class="chip-rect" x="445" y="788" width="300" height="60" rx="14"/>
+    <text class="icon" x="474" y="826" text-anchor="middle">🗄️</text>
+    <text class="chip-title" x="502" y="814">SQL Server</text>
+    <text class="chip-sub" x="502" y="832">:1433</text>
   </g>
 
   <g class="zone-direct">
-    <rect x="800" y="540" width="360" height="250" rx="20" fill="var(--direct-zone)" stroke="var(--direct-zone-border)" stroke-width="1.5" stroke-dasharray="8 6"/>
-    <text class="zone-label" x="824" y="562">directly exposed services</text>
-
-    <rect class="chip-rect" x="825" y="580" width="310" height="60" rx="14"/>
-    <text class="icon" x="854" y="618" text-anchor="middle">🗂️</text>
-    <text class="chip-title" x="882" y="606">OpenLDAP</text>
-    <text class="chip-sub" x="882" y="624">389 · 636 (LDAPS)</text>
+    <rect x="800" y="615" width="360" height="250" rx="20" fill="var(--direct-zone)" stroke="var(--direct-zone-border)" stroke-width="1.5" stroke-dasharray="8 6"/>
+    <text class="zone-label" x="824" y="637">directly exposed services</text>
 
     <rect class="chip-rect" x="825" y="655" width="310" height="60" rx="14"/>
-    <text class="icon" x="854" y="693" text-anchor="middle">🦟</text>
-    <text class="chip-title" x="882" y="681">Mosquitto</text>
-    <text class="chip-sub" x="882" y="699">8883 (MQTTS)</text>
+    <text class="icon" x="854" y="693" text-anchor="middle">🗂️</text>
+    <text class="chip-title" x="882" y="681">OpenLDAP</text>
+    <text class="chip-sub" x="882" y="699">389 · 636 (LDAPS)</text>
+
+    <rect class="chip-rect" x="825" y="730" width="310" height="60" rx="14"/>
+    <text class="icon" x="854" y="768" text-anchor="middle">🦟</text>
+    <text class="chip-title" x="882" y="756">Mosquitto</text>
+    <text class="chip-sub" x="882" y="774">8883 (MQTTS)</text>
   </g>
 
   <!-- CloudBeaver -> database network -->
-  <path class="conn-dashed" d="M480,470 C500,500 520,520 570,540" marker-end="url(#arrow-direct)"/>
+  <path class="conn-dashed" d="M480,470 C500,520 520,565 570,615" marker-end="url(#arrow-direct)"/>
 
   <!-- step-ca issues certs to OpenLDAP and Mosquitto -->
-  <path class="conn-dotted" d="M365,600 C550,470 700,470 855,590" marker-end="url(#arrow-cert)"/>
-  <path class="conn-dotted" d="M365,625 C560,700 700,700 855,670" marker-end="url(#arrow-cert)"/>
+  <path class="conn-dotted" d="M365,675 C550,555 700,555 855,665" marker-end="url(#arrow-cert)"/>
+  <path class="conn-dotted" d="M365,700 C560,605 700,605 855,745" marker-end="url(#arrow-cert)"/>
 
   <!-- Arrow marker defs -->
   <defs>
@@ -220,15 +225,15 @@
 
   <!-- Legend -->
   <g>
-    <line x1="60" y1="836" x2="110" y2="836" class="conn"/>
-    <text class="legend-text" x="118" y="840">HTTPS via Caddy (step-ca's ACME)</text>
+    <line x1="60" y1="911" x2="110" y2="911" class="conn"/>
+    <text class="legend-text" x="118" y="915">HTTPS via Caddy (step-ca's ACME)</text>
 
-    <line x1="440" y1="836" x2="490" y2="836" class="conn-dashed"/>
-    <text class="legend-text" x="498" y="840">Direct connection (TCP/TLS)</text>
+    <line x1="440" y1="911" x2="490" y2="911" class="conn-dashed"/>
+    <text class="legend-text" x="498" y="915">Direct connection (TCP/TLS)</text>
 
-    <line x1="820" y1="836" x2="870" y2="836" class="conn-dotted"/>
-    <text class="legend-text" x="878" y="840">Certificate issuance (step-ca)</text>
+    <line x1="820" y1="911" x2="870" y2="911" class="conn-dotted"/>
+    <text class="legend-text" x="878" y="915">Certificate issuance (step-ca)</text>
   </g>
 
-  <text class="legend-text" x="1140" y="880" text-anchor="end">Step CA Demo Lab · v1.1</text>
+  <text class="legend-text" x="1140" y="955" text-anchor="end">Step CA Demo Lab · v1.1</text>
 </svg>

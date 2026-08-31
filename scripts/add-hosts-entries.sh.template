@@ -29,6 +29,7 @@ HOSTNAMES=(
   "mqtt.${HOSTNAME_FQDN}"
   "mqttws.${HOSTNAME_FQDN}"
   "certificates.${HOSTNAME_FQDN}"
+  "csr.${HOSTNAME_FQDN}"
 )
 
 START_MARKER="# BEGIN stepca-demo-lab (${HOSTNAME_FQDN})"
