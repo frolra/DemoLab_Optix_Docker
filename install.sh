@@ -446,8 +446,8 @@ cat > certs-portal/public/index.html <<EOF_HTML
     background: var(--accent-tint);
   }
   .meta { flex: 1 1 auto; min-width: 0; }
-  .meta .name { font-size: 16px; font-weight: 590; }
-  .meta .desc { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+  .meta .name { display: block; font-size: 16px; font-weight: 590; }
+  .meta .desc { display: block; font-size: 13px; color: var(--text-secondary); margin-top: 3px; }
   .chevron { color: var(--text-secondary); font-size: 20px; }
   .grid {
     display: grid;

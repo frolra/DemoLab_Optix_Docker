@@ -13,7 +13,7 @@ A small, standalone web tool at `https://csr.<HOSTNAME_FQDN>` that builds a PKCS
 
 1. Open `https://csr.<HOSTNAME_FQDN>` and fill in the Subject fields (only Common Name is required) and any Subject Alternative Names (DNS names and/or IP addresses) the certificate needs to match.
 2. Choose a key type (RSA 2048/4096 or ECDSA P-256/P-384) and, optionally, a passphrase to encrypt the downloaded private key.
-3. Click **Generate CSR & Key**. The result page shows the CSR in a copyable text box and the private key (blurred until you click **Show**), plus download buttons for both.
+3. Click **Generate CSR & Key**. The result page shows the CSR in a copyable text box and the private key (blurred until you click **Show**), plus download buttons for both. The private key offers both **Download .key** and **Download .pem** — identical content, different filename extension, since some tools expect one or the other.
 4. **Save the private key now** — it is never stored server-side and cannot be recovered once you leave the page.
 5. Sign in to StepCA Web (`https://stepca.<HOSTNAME_FQDN>`, `webadmin` / `LDAP_ADMIN_PASSWORD`) and open **X.509 → Active Certificates → Submit CSR**.
 6. Paste the CSR, pick the JWK provisioner (its name is in `settings.json`'s `ca.admin_provisioner_name`), enter `STEPCA_PASSWORD` as the provisioner passphrase, and submit.
