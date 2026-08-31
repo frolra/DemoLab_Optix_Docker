@@ -150,8 +150,32 @@ Path("Caddyfile").write_text(src, encoding="utf-8")
 PY_CADDY
 
 mkdir -p ldap/certs ldap/secrets mosquitto/certs mosquitto/secrets certs-portal/public portainer/secrets
-: > ldap/certs/ldap.crt
-: > ldap/certs/ldap.key
+
+# Re-running install.sh against an already-initialized deployment must never
+# touch a working LDAP setup: regenerating ldap.crt/ldap.key and re-applying
+# the RootDN password (below, step [8/12]) while openldap is already running
+# has been confirmed, on a real re-run, to break its TLS listener for every
+# subsequent connection ("TLS: can't accept", every new connection closed
+# with a TLS negotiation failure - see docs/TROUBLESHOOTING.md). Docker cp
+# writes container-to-host files with the ownership of whoever ran it (the
+# installing user, not the container's internal openldap service user), and
+# this specific openldap image (vegardit/openldap) re-validates its TLS
+# certificate/key sources as part of reacting to the live cn=config change
+# that step [8/12] otherwise always performs - a real, reproducible failure,
+# not a one-off. Detect "already bootstrapped" the same way step [2/12]
+# detects an already-configured CA: check for existing content first, before
+# doing anything destructive.
+LDAP_ALREADY_INITIALIZED=no
+if [[ -s ldap/certs/ldap.crt && -s ldap/certs/ldap.key ]]; then
+  LDAP_ALREADY_INITIALIZED=yes
+fi
+
+# Only create empty placeholders the first time, so the very first
+# `docker compose up` for openldap has a regular file (not a directory Docker
+# would otherwise auto-create) to bind-mount - never truncate an existing,
+# already-in-use certificate/key.
+[[ -s ldap/certs/ldap.crt ]] || : > ldap/certs/ldap.crt
+[[ -s ldap/certs/ldap.key ]] || : > ldap/certs/ldap.key
 : > root_ca.crt
 chmod 600 .env ldap/certs/ldap.key
 
@@ -243,27 +267,34 @@ p.write_text(json.dumps(d,indent=2)+'\n',encoding='utf-8')
 PY
 
 echo "[6/12] Creating the LDAP certificate..."
-./prepare-ldap.sh
+if [[ "$LDAP_ALREADY_INITIALIZED" == "yes" ]]; then
+  echo "  LDAP certificate already present; skipping regeneration (this is a re-run against an existing LDAP deployment)."
+else
+  ./prepare-ldap.sh
+fi
 
 echo "[7/12] Starting OpenLDAP..."
 docker compose up -d openldap
 until [[ "$(docker inspect -f '{{.State.Health.Status}}' openldap 2>/dev/null || true)" == healthy ]]; do sleep 3; done
 
 echo "[8/12] Synchronizing RootDN and creating webadmin..."
-ROOT_HASH=$(docker exec openldap slappasswd -s "$LDAP_ADMIN_PASSWORD")
-WEBADMIN_HASH=$(docker exec openldap slappasswd -s "$LDAP_ADMIN_PASSWORD")
+if [[ "$LDAP_ALREADY_INITIALIZED" == "yes" ]]; then
+  echo "  LDAP already bootstrapped (RootDN/webadmin); skipping. Re-applying the RootDN password or re-adding webadmin here has been confirmed to break OpenLDAP's TLS listener on an already-running deployment - see docs/TROUBLESHOOTING.md."
+else
+  ROOT_HASH=$(docker exec openldap slappasswd -s "$LDAP_ADMIN_PASSWORD")
+  WEBADMIN_HASH=$(docker exec openldap slappasswd -s "$LDAP_ADMIN_PASSWORD")
 
-cat > /tmp/ldap-bootstrap.ldif <<EOF_LDIF
+  cat > /tmp/ldap-bootstrap.ldif <<EOF_LDIF
 dn: olcDatabase={1}mdb,cn=config
 changetype: modify
 replace: olcRootPW
 olcRootPW: ${ROOT_HASH}
 EOF_LDIF
 
-docker cp /tmp/ldap-bootstrap.ldif openldap:/tmp/ldap-bootstrap.ldif
-docker exec openldap ldapmodify -Q -Y EXTERNAL -H ldapi:/// -f /tmp/ldap-bootstrap.ldif
+  docker cp /tmp/ldap-bootstrap.ldif openldap:/tmp/ldap-bootstrap.ldif
+  docker exec openldap ldapmodify -Q -Y EXTERNAL -H ldapi:/// -f /tmp/ldap-bootstrap.ldif
 
-cat > /tmp/webadmin-add.ldif <<EOF_LDIF
+  cat > /tmp/webadmin-add.ldif <<EOF_LDIF
 dn: uid=webadmin,ou=Internal,ou=Users,dc=${HOSTNAME_FQDN}
 objectClass: top
 objectClass: person
@@ -279,27 +310,28 @@ userPassword: ${WEBADMIN_HASH}
 pwdReset: FALSE
 EOF_LDIF
 
-docker cp /tmp/webadmin-add.ldif openldap:/tmp/webadmin-add.ldif
-if ! docker exec openldap sh -c 'LDAPTLS_CACERT=/run/secrets/ldap/ca.crt ldapsearch -x -H ldaps://localhost:636 -D "uid=admin,dc='"${HOSTNAME_FQDN}"'" -y /run/secrets/ldap-admin-password -b "uid=webadmin,ou=Internal,ou=Users,dc='"${HOSTNAME_FQDN}"'" -s base dn >/dev/null 2>&1'; then
-  docker exec openldap sh -c 'LDAPTLS_CACERT=/run/secrets/ldap/ca.crt ldapadd -x -H ldaps://localhost:636 -D "uid=admin,dc='"${HOSTNAME_FQDN}"'" -y /run/secrets/ldap-admin-password -f /tmp/webadmin-add.ldif'
-fi
+  docker cp /tmp/webadmin-add.ldif openldap:/tmp/webadmin-add.ldif
+  if ! docker exec openldap sh -c 'LDAPTLS_CACERT=/run/secrets/ldap/ca.crt ldapsearch -x -H ldaps://localhost:636 -D "uid=admin,dc='"${HOSTNAME_FQDN}"'" -y /run/secrets/ldap-admin-password -b "uid=webadmin,ou=Internal,ou=Users,dc='"${HOSTNAME_FQDN}"'" -s base dn >/dev/null 2>&1'; then
+    docker exec openldap sh -c 'LDAPTLS_CACERT=/run/secrets/ldap/ca.crt ldapadd -x -H ldaps://localhost:636 -D "uid=admin,dc='"${HOSTNAME_FQDN}"'" -y /run/secrets/ldap-admin-password -f /tmp/webadmin-add.ldif'
+  fi
 
-cat > /tmp/webadmin-group.ldif <<EOF_LDIF
+  cat > /tmp/webadmin-group.ldif <<EOF_LDIF
 dn: cn=ldap-admins,ou=Groups,dc=${HOSTNAME_FQDN}
 changetype: modify
 add: uniqueMember
 uniqueMember: uid=webadmin,ou=Internal,ou=Users,dc=${HOSTNAME_FQDN}
 EOF_LDIF
 
-docker cp /tmp/webadmin-group.ldif openldap:/tmp/webadmin-group.ldif
-if ! docker exec openldap sh -c 'LDAPTLS_CACERT=/run/secrets/ldap/ca.crt ldapsearch -x -H ldaps://localhost:636 -D "uid=admin,dc='"${HOSTNAME_FQDN}"'" -y /run/secrets/ldap-admin-password -b "cn=ldap-admins,ou=Groups,dc='"${HOSTNAME_FQDN}"'" "(uniqueMember=uid=webadmin,ou=Internal,ou=Users,dc='"${HOSTNAME_FQDN}"')" dn | grep -q "^dn:"'; then
-  docker exec openldap sh -c 'LDAPTLS_CACERT=/run/secrets/ldap/ca.crt ldapmodify -x -H ldaps://localhost:636 -D "uid=admin,dc='"${HOSTNAME_FQDN}"'" -y /run/secrets/ldap-admin-password -f /tmp/webadmin-group.ldif'
+  docker cp /tmp/webadmin-group.ldif openldap:/tmp/webadmin-group.ldif
+  if ! docker exec openldap sh -c 'LDAPTLS_CACERT=/run/secrets/ldap/ca.crt ldapsearch -x -H ldaps://localhost:636 -D "uid=admin,dc='"${HOSTNAME_FQDN}"'" -y /run/secrets/ldap-admin-password -b "cn=ldap-admins,ou=Groups,dc='"${HOSTNAME_FQDN}"'" "(uniqueMember=uid=webadmin,ou=Internal,ou=Users,dc='"${HOSTNAME_FQDN}"')" dn | grep -q "^dn:"'; then
+    docker exec openldap sh -c 'LDAPTLS_CACERT=/run/secrets/ldap/ca.crt ldapmodify -x -H ldaps://localhost:636 -D "uid=admin,dc='"${HOSTNAME_FQDN}"'" -y /run/secrets/ldap-admin-password -f /tmp/webadmin-group.ldif'
+  fi
+
+  rm -f /tmp/ldap-bootstrap.ldif /tmp/webadmin-add.ldif /tmp/webadmin-group.ldif
+  docker exec openldap rm -f /tmp/ldap-bootstrap.ldif /tmp/webadmin-add.ldif /tmp/webadmin-group.ldif
+
+  docker exec openldap sh -c 'LDAPTLS_CACERT=/run/secrets/ldap/ca.crt ldapwhoami -x -H ldaps://localhost:636 -D "uid=webadmin,ou=Internal,ou=Users,dc='"${HOSTNAME_FQDN}"'" -y /run/secrets/ldap-admin-password'
 fi
-
-rm -f /tmp/ldap-bootstrap.ldif /tmp/webadmin-add.ldif /tmp/webadmin-group.ldif
-docker exec openldap rm -f /tmp/ldap-bootstrap.ldif /tmp/webadmin-add.ldif /tmp/webadmin-group.ldif
-
-docker exec openldap sh -c 'LDAPTLS_CACERT=/run/secrets/ldap/ca.crt ldapwhoami -x -H ldaps://localhost:636 -D "uid=webadmin,ou=Internal,ou=Users,dc='"${HOSTNAME_FQDN}"'" -y /run/secrets/ldap-admin-password'
 
 echo "[9/12] Creating the MQTT certificate and credentials..."
 ./prepare-mqtt.sh
