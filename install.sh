@@ -168,14 +168,39 @@ until docker exec step-ca test -s /home/step/config/ca.json 2>/dev/null; do slee
 echo "[2/12] Adding ACME offline and configuring PostgreSQL..."
 docker compose stop step-ca
 
-docker run --rm --volumes-from step-ca smallstep/step-cli:latest \
-  step ca provisioner add acme \
-  --type ACME \
-  --x509-max-dur=8760h \
-  --x509-default-dur=2160h \
-  --ca-config /home/step/config/ca.json
-
 docker cp step-ca:/home/step/config/ca.json ./ca.generated.json
+
+# Re-running install.sh against an already-initialized deployment (e.g. to
+# pick up a new service/site added to docker-compose.yml/Caddyfile.template)
+# must not try to re-add the ACME provisioner: step-ca refuses to store a
+# second provisioner with the same name ("provisioner with name acme already
+# exists", confirmed in step-ca's own source, authority/provisioners.go) and
+# a non-zero exit here would abort the whole script under `set -e`. Skip the
+# add if a provisioner named "acme" is already present.
+HAS_ACME=$(python3 -c "
+import json
+config = json.loads(open('ca.generated.json', encoding='utf-8').read())
+provs = config.get('authority', {}).get('provisioners', []) or []
+found = any(
+    (p.get('name') == 'acme') or (str(p.get('type', '')).upper() == 'ACME')
+    for p in provs
+)
+print('yes' if found else 'no')
+")
+
+if [[ "$HAS_ACME" == "yes" ]]; then
+  echo "  ACME provisioner already present; skipping (this is a re-run against an existing CA)."
+else
+  docker run --rm --volumes-from step-ca smallstep/step-cli:latest \
+    step ca provisioner add acme \
+    --type ACME \
+    --x509-max-dur=8760h \
+    --x509-default-dur=2160h \
+    --ca-config /home/step/config/ca.json
+
+  docker cp step-ca:/home/step/config/ca.json ./ca.generated.json
+fi
+
 python3 <<'PY'
 import json, os
 from pathlib import Path

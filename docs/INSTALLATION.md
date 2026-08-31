@@ -13,6 +13,10 @@ rm -f Caddyfile root_ca.crt jwk_key.json ca.generated.json ca.generated.updated.
 
 A complete rebuild creates a new Root CA, a new `jwk_key.json` (tied to the new CA's own JWK provisioner), and resets Portainer, MySQL, SQL Server, PostgreSQL, CloudBeaver, and Mosquitto data volumes if you also remove their named volumes. Copy and import the new CA; Portainer's and CloudBeaver's administrator accounts are both auto-provisioned again from `.env`, no wizard to repeat for either.
 
+## Updating an Existing Deployment
+
+`./install.sh` is safe to re-run against a deployment it already installed — you don't need a complete rebuild just to pick up a new service or a config change. It detects what's already done (an existing ACME provisioner, an existing `webadmin` LDAP entry, etc.) and skips those steps, while still regenerating `Caddyfile`, re-staging the Certificate Portal, and running `docker compose up -d --build` to build/start anything new and recreate any container whose configuration changed. See [Adding a Web Application](ADDING_WEB_APP.md#adding-a-service-to-an-already-running-deployment) for the exact workflow this enables (for example, this is how the CSR Generator itself would be added to a deployment that installed an earlier version of this repository).
+
 ## v1.1 Additions
 
 `install.sh` now performs several additional steps beyond the v1.0 flow:
