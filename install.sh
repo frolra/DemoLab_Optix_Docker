@@ -235,6 +235,43 @@ pw=os.environ['POSTGRES_PASSWORD']
 config['db']={'type':'postgresql','dataSource':f'postgresql://stepca:{pw}@postgres:5432/stepca?sslmode=disable'}
 claims=config.setdefault('authority',{}).setdefault('claims',{})
 claims.update({'minTLSCertDuration':'5m','maxTLSCertDuration':'8760h','defaultTLSCertDuration':'2160h'})
+
+# The CA's default x509 leaf template only ever copies the CSR's
+# CommonName (and its SANs) into the issued certificate's subject - it
+# silently drops Organization, Organizational Unit, Country, State/Province
+# and Locality, even though the CSR (e.g. from the CSR Generator or the
+# stepca-web "Submit CSR" form) legitimately contains them. Confirmed by
+# reading step-ca's own default template (x509util.DefaultLeafTemplate:
+# "subject": {{ toJson .Subject }}, where .Subject only ever holds
+# CommonName) and its provisioner option handling (a per-request
+# "templateData" is only ever consulted when the provisioner has ITS OWN
+# custom template configured - otherwise it's silently ignored entirely).
+# Give the admin JWK provisioner (the one stepca-web signs through) a
+# custom template that passes the CSR's *actual* subject through
+# untouched instead, keeping the same SANs/keyUsage/extKeyUsage behavior as the
+# built-in default. This is idempotent - re-applying the same template on
+# every install.sh run is harmless, unlike the ACME-provisioner-add or
+# LDAP-bootstrap operations that must be skipped on a re-run.
+X509_TEMPLATE = (
+    '{\n'
+    '    "subject": {{ toJson .Insecure.CR.Subject }},\n'
+    '    "sans": {{ toJson .SANs }},\n'
+    '{{- if typeIs "*rsa.PublicKey" .Insecure.CR.PublicKey }}\n'
+    '    "keyUsage": ["keyEncipherment", "digitalSignature"],\n'
+    '{{- else }}\n'
+    '    "keyUsage": ["digitalSignature"],\n'
+    '{{- end }}\n'
+    '    "extKeyUsage": ["serverAuth", "clientAuth"]\n'
+    '}'
+)
+provisioners = config.get('authority', {}).get('provisioners', []) or []
+for p in provisioners:
+    if str(p.get('type', '')).upper() == 'JWK':
+        options = p.setdefault('options', {})
+        x509_options = options.setdefault('x509', {})
+        x509_options['template'] = X509_TEMPLATE
+        break
+
 dst.write_text(json.dumps(config,indent=2)+'\n',encoding='utf-8')
 PY
 
