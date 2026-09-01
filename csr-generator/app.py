@@ -1,13 +1,22 @@
-"""CSR Generator: a small, stateless helper that builds a PKCS#10 Certificate
-Signing Request and its matching private key from form fields.
+"""CSR Generator: a self-service portal, restricted to LDAP administrators,
+that builds a PKCS#10 Certificate Signing Request and matching private key
+from form fields, signs it directly through this lab's own step-ca (using
+the CA's admin JWK provisioner - see stepca_client.py), and offers the
+result in several formats (PEM, DER, and a password-protectable PKCS#12
+bundle).
 
-It never talks to step-ca, never requires a login, and never persists
-anything: the generated key and CSR exist only in this process's memory for
-the duration of a single request/response cycle. The intended workflow is:
-generate here -> copy the CSR -> paste it into StepCA Web's "Submit CSR"
-form (which is where actual signing, requiring an authenticated admin
-session and the CA's own provisioner password, happens) -> download the
-signed certificate from there. See docs/CSR_GENERATOR.md.
+Only members of the LDAP group configured as LDAP_REQUIRED_GROUP_DN (see
+auth.py) can reach any route here: unlike the original, anonymous version of
+this tool - which only ever built an unsigned CSR/key pair with zero
+connection to the CA - this version can mint a real, trusted certificate for
+any name on its own, so an authenticated, authorized admin session is a hard
+requirement, not an option. See docs/CSR_GENERATOR.md and docs/SECURITY.md.
+
+Nothing is persisted server-side: the private key, the signed certificate,
+and every derived format (DER, PKCS#12) exist only in this process's memory
+for the duration of a single request/response cycle - never written to
+disk, never cached, never logged. Only the LDAP session cookie (just a
+username, signed with SECRET_KEY) survives between requests.
 
 Uses the `cryptography` library to build the CSR programmatically (rather
 than shelling out to the `openssl` CLI) so that user-supplied fields (CN,
@@ -15,17 +24,26 @@ SANs, etc.) can never influence a command line - there is no command line
 to influence.
 """
 
+import base64
 import ipaddress
 import os
 import re
+from functools import wraps
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.x509.oid import NameOID
-from flask import Flask, make_response, render_template, request
+from flask import Flask, make_response, redirect, render_template, request, session, url_for
+
+import cert_formats
+import config
+from auth import LdapAuthError, authenticate_admin
+from stepca_client import SigningError, sign_csr
 
 app = Flask(__name__)
+app.secret_key = config.SECRET_KEY
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
 
 HOSTNAME_FQDN = os.environ.get("HOSTNAME_FQDN", "")
 
@@ -54,6 +72,49 @@ KEY_TYPE_LABELS = {
     "ecp256": "ECDSA P-256",
     "ecp384": "ECDSA P-384",
 }
+
+
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("username"):
+            return redirect(url_for("login", next=request.path))
+        return view(*args, **kwargs)
+
+    return wrapped
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "GET":
+        return render_template("login.html", hostname=HOSTNAME_FQDN)
+
+    username = request.form.get("username", "")
+    password = request.form.get("password", "")
+    try:
+        user = authenticate_admin(
+            username,
+            password,
+            ldap_url=config.LDAP_URL,
+            base_dn=config.LDAP_BASE_DN,
+            required_group_dn=config.LDAP_REQUIRED_GROUP_DN,
+            ca_cert_file=config.CA_BUNDLE,
+        )
+    except LdapAuthError:
+        # Deliberately generic: never reveal whether the failure was a bad
+        # password vs. a real account that just isn't in the admin group.
+        return render_template("login.html", hostname=HOSTNAME_FQDN, error="Invalid credentials."), 401
+
+    session.clear()
+    session["username"] = user["username"]
+    next_path = request.args.get("next") or url_for("index")
+    return redirect(next_path)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 
 def generate_private_key(key_type):
@@ -92,6 +153,15 @@ def parse_sans(types, values):
             else:
                 sans.append(x509.DNSName(value))
     return sans, errors
+
+
+def sans_as_strings(sans):
+    """Flattens the SAN GeneralName objects into plain strings for step-ca's
+    JWT "sans" claim, which - like the CSR itself - must list every SAN
+    (DNS names AND IP addresses) or the CA rejects the request (see
+    docs/TROUBLESHOOTING.md for the bug this exact mistake caused in
+    stepca-web)."""
+    return [s.value if isinstance(s, x509.DNSName) else str(s.value) for s in sans]
 
 
 def build_name_attributes(fields):
@@ -150,11 +220,13 @@ def validate_fields(form):
 
 
 @app.route("/")
+@login_required
 def index():
-    return render_template("index.html", hostname=HOSTNAME_FQDN, key_types=KEY_TYPE_LABELS)
+    return render_template("index.html", hostname=HOSTNAME_FQDN, key_types=KEY_TYPE_LABELS, username=session["username"])
 
 
 @app.route("/generate", methods=["POST"])
+@login_required
 def generate():
     fields, sans, errors = validate_fields(request.form)
 
@@ -164,6 +236,7 @@ def generate():
                 "index.html",
                 hostname=HOSTNAME_FQDN,
                 key_types=KEY_TYPE_LABELS,
+                username=session["username"],
                 error=" ".join(errors),
                 form=fields,
             ),
@@ -194,6 +267,7 @@ def generate():
                 "index.html",
                 hostname=HOSTNAME_FQDN,
                 key_types=KEY_TYPE_LABELS,
+                username=session["username"],
                 error=f"Could not generate the CSR: {exc}",
                 form=fields,
             ),
@@ -204,9 +278,43 @@ def generate():
         "csr_pem": csr_pem,
         "key_pem": key_pem,
         "filename": sanitize_filename(fields["common_name"]),
+        "signed": None,
+        "signing_error": None,
     }
+
+    try:
+        signed = sign_csr(
+            csr_pem,
+            fields["common_name"],
+            sans_as_strings(sans),
+            ca_url=config.CA_URL,
+            ca_fingerprint=config.CA_FINGERPRINT,
+            provisioner_name=config.CA_ADMIN_PROVISIONER_NAME,
+            passphrase=config.STEPCA_PASSWORD,
+            ca_bundle=config.CA_BUNDLE,
+        )
+        der_bytes = cert_formats.pem_cert_to_der(signed["leaf_pem"])
+        pfx_bytes = cert_formats.build_pkcs12(
+            fields["common_name"], private_key, signed["leaf_pem"], signed["chain_pem"], fields["key_passphrase"]
+        )
+        result["signed"] = {
+            "cert_pem": signed["leaf_pem"],
+            "cert_der_b64": base64.b64encode(der_bytes).decode("ascii"),
+            "pfx_b64": base64.b64encode(pfx_bytes).decode("ascii"),
+            "pfx_has_passphrase": bool(fields["key_passphrase"]),
+        }
+    except SigningError as exc:
+        # The CSR and private key were still generated successfully; only
+        # the automatic signing step failed. Surface the reason (this is an
+        # authenticated admin session, so the CA's own error message is safe
+        # and useful to show, unlike a public-facing form) and still let the
+        # admin keep the CSR/key rather than losing them.
+        result["signing_error"] = str(exc)
+
     response = make_response(
-        render_template("index.html", hostname=HOSTNAME_FQDN, key_types=KEY_TYPE_LABELS, result=result)
+        render_template(
+            "index.html", hostname=HOSTNAME_FQDN, key_types=KEY_TYPE_LABELS, username=session["username"], result=result
+        )
     )
     # The response body contains a freshly generated private key; make sure
     # nothing between here and the browser keeps a copy of it.

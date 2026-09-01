@@ -1,27 +1,32 @@
 # CSR Generator
 
-A small, standalone web tool at `https://csr.<HOSTNAME_FQDN>` that builds a PKCS#10 Certificate Signing Request (CSR) and a matching private key from a form, so you don't need `openssl` or `step` installed locally to produce a well-formed CSR.
+A self-service certificate portal at `https://csr.<HOSTNAME_FQDN>`, restricted to members of this lab's LDAP admin group (`cn=ldap-admins,ou=Groups,dc=<HOSTNAME_FQDN>` - the same group `webadmin` belongs to), that builds a PKCS#10 Certificate Signing Request and a matching private key from a form, signs it **directly and automatically** through this lab's own step-ca, and offers the signed certificate in several formats.
 
 ## What it does, and does not, do
 
+- **Requires an LDAP admin login.** The portal binds to OpenLDAP as the submitted username/password and additionally checks that the account is a member of the required admin group before showing anything - see [docs/SECURITY.md](SECURITY.md) for why this changed from the original, anonymous version of this tool.
 - **Generates** a private key and CSR from the fields you fill in (Common Name, Organization, Subject Alternative Names, key type, etc.), entirely in memory.
-- **Does not** talk to step-ca, does not know any CA secret, and cannot issue or sign a certificate by itself. Signing still happens exclusively through StepCA Web (see [docs/DATABASES.md](DATABASES.md)-style admin flow below), which requires an authenticated LDAP admin session and the CA's own JWK provisioner password.
-- **Does not** require a login and applies no restriction on the Common Name or Subject Alternative Names you request — anyone who can reach the portal can generate a CSR/key pair for any name. This is deliberate and, unlike a signing service, has no real-world consequence by itself: a CSR and its private key are inert until an authenticated admin chooses to sign that CSR in StepCA Web. See [docs/SECURITY.md](SECURITY.md) for the full reasoning.
-- **Does not persist anything.** No database, no volume, nothing written to disk. Every key and CSR exists only for the lifetime of a single HTTP request/response. Refreshing the page or navigating away loses it permanently — save it before you do.
+- **Signs the CSR immediately** through step-ca's admin JWK provisioner (the same provisioner `jwk_key.json`/StepCA Web use), decrypting its key with `STEPCA_PASSWORD` (held internally by the container - the LDAP admin-group login is the only authorization check; you are not separately prompted for the CA provisioner passphrase). No copy-pasting into another tool is needed any more.
+- **Does not persist anything.** No database, no volume for generated material, nothing written to disk. Every key, CSR, and signed certificate exists only for the lifetime of a single HTTP request/response. Refreshing the page or navigating away loses it permanently - save it before you do. Only the LDAP session cookie (your username, signed with `CSR_GENERATOR_SECRET_KEY`) survives between requests.
 
 ## End-to-end workflow
 
-1. Open `https://csr.<HOSTNAME_FQDN>` and fill in the Subject fields (only Common Name is required) and any Subject Alternative Names (DNS names and/or IP addresses) the certificate needs to match.
-2. Choose a key type (RSA 2048/4096 or ECDSA P-256/P-384) and, optionally, a passphrase to encrypt the downloaded private key.
-3. Click **Generate CSR & Key**. The result page shows the CSR in a copyable text box and the private key (blurred until you click **Show**), plus download buttons for both. The private key offers both **Download .key** and **Download .pem** — identical content, different filename extension, since some tools expect one or the other.
-4. **Save the private key now** — it is never stored server-side and cannot be recovered once you leave the page.
-5. Sign in to StepCA Web (`https://stepca.<HOSTNAME_FQDN>`, `webadmin` / `LDAP_ADMIN_PASSWORD`) and open **X.509 → Active Certificates → Submit CSR**.
-6. Paste the CSR, pick the JWK provisioner (its name is in `settings.json`'s `ca.admin_provisioner_name`), enter `STEPCA_PASSWORD` as the provisioner passphrase, and submit.
-7. Download the signed certificate from the Active Certificates list, and pair it with the private key you saved in step 4.
+1. Open `https://csr.<HOSTNAME_FQDN>` and sign in with your LDAP admin account (`webadmin` / `LDAP_ADMIN_PASSWORD`, or any other account in the `ldap-admins` group).
+2. Fill in the Subject fields (only Common Name is required) and any Subject Alternative Names (DNS names and/or IP addresses) the certificate needs to match.
+3. Choose a key type (RSA 2048/4096 or ECDSA P-256/P-384) and, optionally, a passphrase. If set, this passphrase both encrypts the downloaded private key **and** protects the downloaded `.pfx` bundle - the same value is reused for both.
+4. Click **Generate CSR & Key**. The CSR and key are built, then the CSR is immediately submitted to step-ca and signed.
+5. The result page shows the signed certificate, the CSR, and the private key (blurred until you click **Show**), with download buttons for each:
+   - **Signed Certificate:** `.pem` (text), `.der` (binary - required by tools that reject a merely-renamed `.pem`, such as FactoryTalk Optix's `PKI/Own/Certs`; see [docs/TROUBLESHOOTING.md](TROUBLESHOOTING.md)), and `.pfx` (a PKCS#12 bundle containing the certificate, its private key, and the issuing intermediate certificate in one password-protectable file - the format most Windows and industrial-automation tools expect when they need the certificate and its key together).
+   - **CSR:** `.csr`, kept for reference/audit even though it's already been signed.
+   - **Private Key:** `.key` / `.pem` (identical content, different extension).
+6. **Save everything now** - none of it is stored server-side and none of it can be recovered once you leave the page.
+7. If automatic signing fails for any reason (the CA is unreachable, `STEPCA_PASSWORD` no longer matches, a policy rejects the request, etc.), the CSR and private key are still shown along with the CA's own error message - nothing is lost, only the signed-certificate section is missing.
 
 ## Implementation notes
 
-- Built with Flask and the `cryptography` library — the CSR is constructed programmatically (subject name and SAN objects), never by shelling out to `openssl` with user-supplied strings, so there is no command-injection surface regardless of what a user types into the form.
-- Runs on the `web` network only; it has no route to `pki` or `database`, and needs no secret of any kind (no `.env` variable, no mounted credential file).
+- Built with Flask, `cryptography` (CSR/key/DER/PKCS#12 construction), `ldap3` (LDAP bind + group check), `jwcrypto` (decrypting the provisioner's encrypted JWK), and `PyJWT` (the ES256 signing token sent to step-ca) - see `csr-generator/requirements.txt`.
+- The CSR itself is still constructed programmatically (subject name and SAN objects), never by shelling out to `openssl` with user-supplied strings, so there is no command-injection surface regardless of what a user types into the form.
+- Runs on the `web` network only (it reaches both `step-ca` and `openldap` there, since both containers are also attached to `web`); it has no route to `pki` or `database` as internal-only networks, but does make outbound HTTPS/LDAPS calls to `step-ca`/`openldap` over `web`.
+- Reuses `settings.json`'s `ca.*`/`ldap.*` fields (mounted read-only, the same file StepCA Web already uses) for CA/LDAP connection details, and `root_ca.crt` (mounted read-only) to verify both step-ca's HTTPS endpoint and OpenLDAP's LDAPS endpoint. `STEPCA_PASSWORD` and `CSR_GENERATOR_SECRET_KEY` (a new required `.env` variable, at least 32 characters, validated by `install.sh` the same way `STEPCA_WEB_SECRET_KEY` is) come from the environment.
 - Every response containing key material is sent with `Cache-Control: no-store`.
-- See [docs/ADDING_WEB_APP.md](ADDING_WEB_APP.md) for the general pattern this service follows (its own `Dockerfile`, a `web`-only network, an entry in Caddy's aliases, and a site block in `Caddyfile.template`).
+- See [docs/ADDING_WEB_APP.md](ADDING_WEB_APP.md) for the general pattern this service follows (its own `Dockerfile`, a `web`-network service, an entry in Caddy's aliases, and a site block in `Caddyfile.template`).

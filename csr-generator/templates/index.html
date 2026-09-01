@@ -57,6 +57,7 @@
     display: inline-block; margin-top: 16px; padding: 6px 14px; font-size: 13px; font-weight: 590;
     color: var(--accent); background: var(--accent-tint); border-radius: 980px;
   }
+  .badge a { color: inherit; text-decoration: underline; }
   .card {
     background: var(--surface);
     backdrop-filter: saturate(180%) blur(20px);
@@ -110,8 +111,8 @@
 <div class="wrap">
   <header>
     <h1>CSR Generator</h1>
-    <p>Fill in your certificate's details to generate a Certificate Signing Request and a matching private key. Nothing is stored on the server.</p>
-    <span class="badge">Stateless &middot; no login required</span>
+      <p>Fill in your certificate's details to generate a Certificate Signing Request, a matching private key, and have it signed immediately by this lab's own CA.</p>
+      <span class="badge">Signed in as {{ username }} &middot; <a href="{{ url_for('logout') }}">Sign out</a></span>
   </header>
 
   {% if error %}
@@ -205,10 +206,37 @@
   </script>
 
   {% else %}
+  {% if result.signed %}
   <div class="alert warning">
     This private key is generated for this request only and is <strong>never stored</strong> on the server.
     Copy or download it now &mdash; it cannot be recovered after you leave this page.
   </div>
+  {% else %}
+  <div class="alert danger">
+    The certificate could not be signed automatically: {{ result.signing_error }}<br>
+    Your CSR and private key were still generated successfully and are available below &mdash; save them now, since they cannot be recovered after you leave this page.
+  </div>
+  {% endif %}
+
+  {% if result.signed %}
+  <div class="card">
+    <h2>Signed Certificate</h2>
+    <textarea id="certText" readonly>{{ result.signed.cert_pem }}</textarea>
+    <input type="hidden" id="certDerB64" value="{{ result.signed.cert_der_b64 }}">
+    <input type="hidden" id="certPfxB64" value="{{ result.signed.pfx_b64 }}">
+    <div class="actions">
+      <button type="button" class="secondary" onclick="copyField('certText')">Copy Certificate</button>
+      <button type="button" class="secondary" onclick="downloadField('certText', '{{ result.filename }}.pem')">Download .pem</button>
+      <button type="button" class="secondary" onclick="downloadBase64('certDerB64', '{{ result.filename }}.der', 'application/x-x509-ca-cert')">Download .der</button>
+      <button type="button" class="secondary" onclick="downloadBase64('certPfxB64', '{{ result.filename }}.pfx', 'application/x-pkcs12')">Download .pfx</button>
+    </div>
+    <p class="hint">
+      Signed directly by this lab's CA &mdash; ready to deploy, no separate signing step needed.
+      <strong>.pfx</strong> bundles this certificate, its private key, and the issuing CA certificate in one file
+      {% if result.signed.pfx_has_passphrase %}(protected by the private key passphrase you entered above){% else %}(no passphrase was entered, so the .pfx is unencrypted){% endif %}.
+    </p>
+  </div>
+  {% endif %}
 
   <div class="card">
     <h2>Certificate Signing Request</h2>
@@ -217,7 +245,7 @@
       <button type="button" class="secondary" onclick="copyField('csrText')">Copy CSR</button>
       <button type="button" class="secondary" onclick="downloadField('csrText', '{{ result.filename }}.csr')">Download .csr</button>
     </div>
-    <p class="hint">Paste this into StepCA Web's <strong>X.509 &rarr; Active Certificates &rarr; Submit CSR</strong> form to have it signed.</p>
+    <p class="hint">Kept for reference/audit &mdash; the certificate above was already signed from this exact CSR.</p>
   </div>
 
   <div class="card">
@@ -244,6 +272,21 @@
     function downloadField(id, filename) {
       const value = document.getElementById(id).value;
       const blob = new Blob([value], { type: 'application/x-pem-file' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+    function downloadBase64(id, filename, mime) {
+      const b64 = document.getElementById(id).value;
+      const binary = atob(b64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: mime });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

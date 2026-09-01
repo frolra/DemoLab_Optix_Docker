@@ -325,9 +325,19 @@ services:
     container_name: csr-generator
     restart: unless-stopped
     networks: [web]
+    depends_on:
+      step-ca:
+        condition: service_healthy
+      openldap:
+        condition: service_healthy
     expose: ["8000"]
     environment:
       HOSTNAME_FQDN: ${HOSTNAME_FQDN}
+      SECRET_KEY: ${CSR_GENERATOR_SECRET_KEY}
+      STEPCA_PASSWORD: ${STEPCA_PASSWORD}
+    volumes:
+      - ./settings.json:/app/settings.json:ro
+      - ./root_ca.crt:/etc/ssl/certs/root_ca.crt:ro
 
 networks:
   pki:
