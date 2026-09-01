@@ -280,36 +280,38 @@ def generate():
         "filename": sanitize_filename(fields["common_name"]),
         "signed": None,
         "signing_error": None,
+        "sign_requested": request.form.get("action", "sign") != "csr_only",
     }
 
-    try:
-        signed = sign_csr(
-            csr_pem,
-            fields["common_name"],
-            sans_as_strings(sans),
-            ca_url=config.CA_URL,
-            ca_fingerprint=config.CA_FINGERPRINT,
-            provisioner_name=config.CA_ADMIN_PROVISIONER_NAME,
-            passphrase=config.STEPCA_PASSWORD,
-            ca_bundle=config.CA_BUNDLE,
-        )
-        der_bytes = cert_formats.pem_cert_to_der(signed["leaf_pem"])
-        pfx_bytes = cert_formats.build_pkcs12(
-            fields["common_name"], private_key, signed["leaf_pem"], signed["chain_pem"], fields["key_passphrase"]
-        )
-        result["signed"] = {
-            "cert_pem": signed["leaf_pem"],
-            "cert_der_b64": base64.b64encode(der_bytes).decode("ascii"),
-            "pfx_b64": base64.b64encode(pfx_bytes).decode("ascii"),
-            "pfx_has_passphrase": bool(fields["key_passphrase"]),
-        }
-    except SigningError as exc:
-        # The CSR and private key were still generated successfully; only
-        # the automatic signing step failed. Surface the reason (this is an
-        # authenticated admin session, so the CA's own error message is safe
-        # and useful to show, unlike a public-facing form) and still let the
-        # admin keep the CSR/key rather than losing them.
-        result["signing_error"] = str(exc)
+    if result["sign_requested"]:
+        try:
+            signed = sign_csr(
+                csr_pem,
+                fields["common_name"],
+                sans_as_strings(sans),
+                ca_url=config.CA_URL,
+                ca_fingerprint=config.CA_FINGERPRINT,
+                provisioner_name=config.CA_ADMIN_PROVISIONER_NAME,
+                passphrase=config.STEPCA_PASSWORD,
+                ca_bundle=config.CA_BUNDLE,
+            )
+            der_bytes = cert_formats.pem_cert_to_der(signed["leaf_pem"])
+            pfx_bytes = cert_formats.build_pkcs12(
+                fields["common_name"], private_key, signed["leaf_pem"], signed["chain_pem"], fields["key_passphrase"]
+            )
+            result["signed"] = {
+                "cert_pem": signed["leaf_pem"],
+                "cert_der_b64": base64.b64encode(der_bytes).decode("ascii"),
+                "pfx_b64": base64.b64encode(pfx_bytes).decode("ascii"),
+                "pfx_has_passphrase": bool(fields["key_passphrase"]),
+            }
+        except SigningError as exc:
+            # The CSR and private key were still generated successfully; only
+            # the automatic signing step failed. Surface the reason (this is an
+            # authenticated admin session, so the CA's own error message is safe
+            # and useful to show, unlike a public-facing form) and still let the
+            # admin keep the CSR/key rather than losing them.
+            result["signing_error"] = str(exc)
 
     response = make_response(
         render_template(

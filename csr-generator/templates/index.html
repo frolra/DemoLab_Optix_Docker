@@ -92,6 +92,7 @@
   .add-san { margin-top: 4px; }
   .actions { display: flex; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
   .hint { font-size: 12px; color: var(--text-secondary); margin: -10px 0 16px; }
+  .hint-below-actions { font-size: 12px; color: var(--text-secondary); margin: 10px 0 0; }
   .alert { padding: 14px 18px; border-radius: 12px; font-size: 14px; margin-bottom: 24px; }
   .alert.danger { background: var(--danger-tint); color: var(--danger); }
   .alert.warning { background: var(--warning-bg); color: var(--warning-text); }
@@ -111,8 +112,8 @@
 <div class="wrap">
   <header>
     <h1>CSR Generator</h1>
-      <p>Fill in your certificate's details to generate a Certificate Signing Request, a matching private key, and have it signed immediately by this lab's own CA.</p>
-      <span class="badge">Signed in as {{ username }} &middot; <a href="{{ url_for('logout') }}">Sign out</a></span>
+    <p>Fill in your certificate's details to generate a Certificate Signing Request and a matching private key &mdash; then either have it signed immediately by this lab's own CA, or download it to submit to an external CA.</p>
+    <span class="badge">Signed in as {{ username }} &middot; <a href="{{ url_for('logout') }}">Sign out</a></span>
   </header>
 
   {% if error %}
@@ -176,7 +177,8 @@
     </div>
 
     <div class="actions">
-      <button type="submit">Generate CSR &amp; Key</button>
+      <button type="submit" name="action" value="sign">Generate Key and Certificate</button>
+      <button type="submit" name="action" value="csr_only" class="secondary">Generate Key and Request (for external CA)</button>
     </div>
   </form>
 
@@ -211,10 +213,15 @@
     This private key is generated for this request only and is <strong>never stored</strong> on the server.
     Copy or download it now &mdash; it cannot be recovered after you leave this page.
   </div>
-  {% else %}
+  {% elif result.sign_requested %}
   <div class="alert danger">
     The certificate could not be signed automatically: {{ result.signing_error }}<br>
     Your CSR and private key were still generated successfully and are available below &mdash; save them now, since they cannot be recovered after you leave this page.
+  </div>
+  {% else %}
+  <div class="alert warning">
+    This CSR and private key were generated for this request only and are <strong>never stored</strong> on the server &mdash; not signed by this lab's CA, ready to submit to an external CA instead.
+    Copy or download them now &mdash; they cannot be recovered after you leave this page.
   </div>
   {% endif %}
 
@@ -230,7 +237,7 @@
       <button type="button" class="secondary" onclick="downloadBase64('certDerB64', '{{ result.filename }}.der', 'application/x-x509-ca-cert')">Download .der</button>
       <button type="button" class="secondary" onclick="downloadBase64('certPfxB64', '{{ result.filename }}.pfx', 'application/x-pkcs12')">Download .pfx</button>
     </div>
-    <p class="hint">
+    <p class="hint-below-actions">
       Signed directly by this lab's CA &mdash; ready to deploy, no separate signing step needed.
       <strong>.pfx</strong> bundles this certificate, its private key, and the issuing CA certificate in one file
       {% if result.signed.pfx_has_passphrase %}(protected by the private key passphrase you entered above){% else %}(no passphrase was entered, so the .pfx is unencrypted){% endif %}.
@@ -238,6 +245,7 @@
   </div>
   {% endif %}
 
+  {% if not result.signed %}
   <div class="card">
     <h2>Certificate Signing Request</h2>
     <textarea id="csrText" readonly>{{ result.csr_pem }}</textarea>
@@ -245,8 +253,9 @@
       <button type="button" class="secondary" onclick="copyField('csrText')">Copy CSR</button>
       <button type="button" class="secondary" onclick="downloadField('csrText', '{{ result.filename }}.csr')">Download .csr</button>
     </div>
-    <p class="hint">Kept for reference/audit &mdash; the certificate above was already signed from this exact CSR.</p>
+    <p class="hint-below-actions">Submit this CSR to an external CA to have it signed, or retry generating with automatic signing.</p>
   </div>
+  {% endif %}
 
   <div class="card">
     <h2>Private Key</h2>

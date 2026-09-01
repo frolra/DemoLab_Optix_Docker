@@ -1,26 +1,27 @@
 # CSR Generator
 
-A self-service certificate portal at `https://csr.<HOSTNAME_FQDN>`, restricted to members of this lab's LDAP admin group (`cn=ldap-admins,ou=Groups,dc=<HOSTNAME_FQDN>` - the same group `webadmin` belongs to), that builds a PKCS#10 Certificate Signing Request and a matching private key from a form, signs it **directly and automatically** through this lab's own step-ca, and offers the signed certificate in several formats.
+A self-service certificate portal at `https://csr.<HOSTNAME_FQDN>`, restricted to members of this lab's LDAP admin group (`cn=ldap-admins,ou=Groups,dc=<HOSTNAME_FQDN>` - the same group `webadmin` belongs to), that builds a PKCS#10 Certificate Signing Request and a matching private key from a form, and offers two ways to finish: sign it **directly and automatically** through this lab's own step-ca, or just download the CSR/key pair to submit to an external CA instead.
 
 ## What it does, and does not, do
 
 - **Requires an LDAP admin login.** The portal binds to OpenLDAP as the submitted username/password and additionally checks that the account is a member of the required admin group before showing anything - see [docs/SECURITY.md](SECURITY.md) for why this changed from the original, anonymous version of this tool.
 - **Generates** a private key and CSR from the fields you fill in (Common Name, Organization, Subject Alternative Names, key type, etc.), entirely in memory.
-- **Signs the CSR immediately** through step-ca's admin JWK provisioner (the same provisioner `jwk_key.json`/StepCA Web use), decrypting its key with `STEPCA_PASSWORD` (held internally by the container - the LDAP admin-group login is the only authorization check; you are not separately prompted for the CA provisioner passphrase). No copy-pasting into another tool is needed any more.
+- **Offers two outcomes**, chosen with two separate buttons on the form:
+  - **Generate Key and Certificate** signs the CSR immediately through step-ca's admin JWK provisioner (the same provisioner `jwk_key.json`/StepCA Web use), decrypting its key with `STEPCA_PASSWORD` (held internally by the container - the LDAP admin-group login is the only authorization check; you are not separately prompted for the CA provisioner passphrase). No copy-pasting into another tool is needed.
+  - **Generate Key and Request (for external CA)** skips signing entirely and only returns the CSR and private key - for certificates that need to be issued by a CA outside this lab.
 - **Does not persist anything.** No database, no volume for generated material, nothing written to disk. Every key, CSR, and signed certificate exists only for the lifetime of a single HTTP request/response. Refreshing the page or navigating away loses it permanently - save it before you do. Only the LDAP session cookie (your username, signed with `CSR_GENERATOR_SECRET_KEY`) survives between requests.
 
 ## End-to-end workflow
 
 1. Open `https://csr.<HOSTNAME_FQDN>` and sign in with your LDAP admin account (`webadmin` / `LDAP_ADMIN_PASSWORD`, or any other account in the `ldap-admins` group).
 2. Fill in the Subject fields (only Common Name is required) and any Subject Alternative Names (DNS names and/or IP addresses) the certificate needs to match.
-3. Choose a key type (RSA 2048/4096 or ECDSA P-256/P-384) and, optionally, a passphrase. If set, this passphrase both encrypts the downloaded private key **and** protects the downloaded `.pfx` bundle - the same value is reused for both.
-4. Click **Generate CSR & Key**. The CSR and key are built, then the CSR is immediately submitted to step-ca and signed.
-5. The result page shows the signed certificate, the CSR, and the private key (blurred until you click **Show**), with download buttons for each:
-   - **Signed Certificate:** `.pem` (text), `.der` (binary - required by tools that reject a merely-renamed `.pem`, such as FactoryTalk Optix's `PKI/Own/Certs`; see [docs/TROUBLESHOOTING.md](TROUBLESHOOTING.md)), and `.pfx` (a PKCS#12 bundle containing the certificate, its private key, and the issuing intermediate certificate in one password-protectable file - the format most Windows and industrial-automation tools expect when they need the certificate and its key together).
-   - **CSR:** `.csr`, kept for reference/audit even though it's already been signed.
-   - **Private Key:** `.key` / `.pem` (identical content, different extension).
+3. Choose a key type (RSA 2048/4096 or ECDSA P-256/P-384) and, optionally, a passphrase. If set, this passphrase both encrypts the downloaded private key **and** protects the downloaded `.pfx` bundle (when signing through this lab's CA) - the same value is reused for both.
+4. Click **Generate Key and Certificate** to sign immediately through this lab's CA, or **Generate Key and Request (for external CA)** to only build the CSR/key pair.
+5. The result page shows:
+   - **If signed:** the signed certificate (`.pem`, `.der` - binary, required by tools that reject a merely-renamed `.pem`, such as FactoryTalk Optix's `PKI/Own/Certs`, see [docs/TROUBLESHOOTING.md](TROUBLESHOOTING.md) - and `.pfx`, a PKCS#12 bundle containing the certificate, its private key, and the issuing intermediate certificate in one password-protectable file), plus the private key. The CSR itself isn't shown - it's redundant once signed.
+   - **If not signed** (either you chose "for external CA", or automatic signing failed - the CA's own error message is shown in that case): the CSR (`.csr`) and private key, ready to submit to an external CA or retry.
+   - **Private Key** either way: `.key` / `.pem` (identical content, different extension).
 6. **Save everything now** - none of it is stored server-side and none of it can be recovered once you leave the page.
-7. If automatic signing fails for any reason (the CA is unreachable, `STEPCA_PASSWORD` no longer matches, a policy rejects the request, etc.), the CSR and private key are still shown along with the CA's own error message - nothing is lost, only the signed-certificate section is missing.
 
 ## Implementation notes
 
