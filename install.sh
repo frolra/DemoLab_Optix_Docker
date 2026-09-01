@@ -237,43 +237,6 @@ pw=os.environ['POSTGRES_PASSWORD']
 config['db']={'type':'postgresql','dataSource':f'postgresql://stepca:{pw}@postgres:5432/stepca?sslmode=disable'}
 claims=config.setdefault('authority',{}).setdefault('claims',{})
 claims.update({'minTLSCertDuration':'5m','maxTLSCertDuration':'8760h','defaultTLSCertDuration':'2160h'})
-
-# The CA's default x509 leaf template only ever copies the CSR's
-# CommonName (and its SANs) into the issued certificate's subject - it
-# silently drops Organization, Organizational Unit, Country, State/Province
-# and Locality, even though the CSR (e.g. from the CSR Generator or the
-# stepca-web "Submit CSR" form) legitimately contains them. Confirmed by
-# reading step-ca's own default template (x509util.DefaultLeafTemplate:
-# "subject": {{ toJson .Subject }}, where .Subject only ever holds
-# CommonName) and its provisioner option handling (a per-request
-# "templateData" is only ever consulted when the provisioner has ITS OWN
-# custom template configured - otherwise it's silently ignored entirely).
-# Give the admin JWK provisioner (the one stepca-web signs through) a
-# custom template that passes the CSR's *actual* subject through
-# untouched instead, keeping the same SANs/keyUsage/extKeyUsage behavior as the
-# built-in default. This is idempotent - re-applying the same template on
-# every install.sh run is harmless, unlike the ACME-provisioner-add or
-# LDAP-bootstrap operations that must be skipped on a re-run.
-X509_TEMPLATE = (
-    '{\n'
-    '    "subject": {{ toJson .Insecure.CR.Subject }},\n'
-    '    "sans": {{ toJson .SANs }},\n'
-    '{{- if typeIs "*rsa.PublicKey" .Insecure.CR.PublicKey }}\n'
-    '    "keyUsage": ["keyEncipherment", "digitalSignature"],\n'
-    '{{- else }}\n'
-    '    "keyUsage": ["digitalSignature"],\n'
-    '{{- end }}\n'
-    '    "extKeyUsage": ["serverAuth", "clientAuth"]\n'
-    '}'
-)
-provisioners = config.get('authority', {}).get('provisioners', []) or []
-for p in provisioners:
-    if str(p.get('type', '')).upper() == 'JWK':
-        options = p.setdefault('options', {})
-        x509_options = options.setdefault('x509', {})
-        x509_options['template'] = X509_TEMPLATE
-        break
-
 dst.write_text(json.dumps(config,indent=2)+'\n',encoding='utf-8')
 PY
 
@@ -304,6 +267,73 @@ d['ca'].update({'url':'https://step-ca:9000','fingerprint':sys.argv[1],'admin_pr
 d['ldap'].update({'url':'ldaps://openldap:636','base_dn':f'dc={h}','domain':h,'user_search_base':f'dc={h}','ldap_required_group_dn':f'cn=ldap-admins,ou=Groups,dc={h}'})
 p.write_text(json.dumps(d,indent=2)+'\n',encoding='utf-8')
 PY
+
+# The CA's default x509 leaf template only ever copies the CSR's CommonName
+# (and its SANs) into the issued certificate's subject - it silently drops
+# Organization, Organizational Unit, Country, State/Province and Locality,
+# even though the CSR (e.g. from the CSR Generator) legitimately contains
+# them (confirmed by reading step-ca's own default template,
+# x509util.DefaultLeafTemplate: "subject": {{ toJson .Subject }}, where
+# .Subject only ever holds CommonName).
+#
+# An earlier version of this fix edited ca.json's "authority.provisioners"
+# array directly (offline, while step-ca was stopped) - that turned out to
+# be a complete no-op on any already-running deployment, and only an
+# accidental, one-time coincidence on a brand new install. Root cause,
+# confirmed by reading step-ca's own source (authority.go's
+# ReloadAdminResources): once step-ca boots with EnableAdmin (this project
+# always sets DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT=true) and its Postgres-
+# backed admin database already contains provisioners, the *live* server
+# never again reads authority.provisioners from ca.json - only the very
+# first ever Postgres-backed boot migrates whatever was in that file at
+# that exact moment into Postgres, once, permanently. Editing the file
+# after that point (i.e. on every subsequent install.sh run, and even on
+# this very same run for anyone re-installing) changes nothing.
+#
+# Fix: apply the template through the live Admin API instead, exactly the
+# way `step ca provisioner update` is meant to be used, authenticating with
+# a short-lived admin credential bootstrapped from the JWK provisioner and
+# its own password - not a pre-existing admin certificate. step-ca's own
+# docker entrypoint (docker/entrypoint.sh) always creates a default
+# super-admin with subject "step" when DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT
+# is enabled (DOCKER_STEPCA_INIT_ADMIN_SUBJECT is never overridden in this
+# project's docker-compose.yml), bound to the JWK provisioner. This mirrors
+# the update/GetProvisioner-then-PATCH behavior of the `step` CLI itself,
+# so every other setting already on the provisioner (its key, claims,
+# etc.) is preserved untouched - only the x509 template field changes.
+# Applying the same template on every install.sh run (fresh install or
+# re-run against an existing deployment) is idempotent and harmless.
+echo "Configuring the '$JWK_PROVISIONER' provisioner's certificate template..."
+cat > /tmp/x509-template.json <<'JSON'
+{
+    "subject": {{ toJson .Insecure.CR.Subject }},
+    "sans": {{ toJson .SANs }},
+{{- if typeIs "*rsa.PublicKey" .Insecure.CR.PublicKey }}
+    "keyUsage": ["keyEncipherment", "digitalSignature"],
+{{- else }}
+    "keyUsage": ["digitalSignature"],
+{{- end }}
+    "extKeyUsage": ["serverAuth", "clientAuth"]
+}
+JSON
+docker cp /tmp/x509-template.json step-ca:/tmp/x509-template.json
+
+printf '%s' "$STEPCA_PASSWORD" > /tmp/admin-password
+chmod 600 /tmp/admin-password
+docker cp /tmp/admin-password step-ca:/tmp/admin-password
+docker exec -u root step-ca chown step:step /tmp/admin-password
+docker exec step-ca chmod 600 /tmp/admin-password
+
+docker exec step-ca step ca provisioner update "$JWK_PROVISIONER" \
+  --ca-url https://localhost:9000 \
+  --root /home/step/certs/root_ca.crt \
+  --x509-template /tmp/x509-template.json \
+  --admin-subject step \
+  --admin-provisioner "$JWK_PROVISIONER" \
+  --admin-password-file /tmp/admin-password
+
+docker exec step-ca rm -f /tmp/x509-template.json /tmp/admin-password
+rm -f /tmp/x509-template.json /tmp/admin-password
 
 echo "[6/12] Creating the LDAP certificate..."
 if [[ "$LDAP_ALREADY_INITIALIZED" == "yes" ]]; then
